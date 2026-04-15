@@ -26,6 +26,11 @@ const WATCH_ZONE_ID = "frontWatch";
 const COUNT_HISTORY_SIZE = 12;
 const MANNING_CONFIRM_FRAMES = 10;
 
+// Tracking tuning
+const TRACK_MATCH_DISTANCE = 0.12; // normalized distance
+const TRACK_MAX_MISSING_FRAMES = 18;
+const TRACK_CONFIRM_FRAMES = 3;
+
 const DEFAULT_ZONES = [
   {
     id: "chartTable",
@@ -176,6 +181,31 @@ function getManningStatus(mode, actualCount) {
     : "WATCH_MANNING_INSUFFICIENT_DAY";
 }
 
+function getBBoxFromLandmarks(landmarks, isPointReliable) {
+  const xs = [];
+  const ys = [];
+
+  landmarks.forEach((p) => {
+    if (!isPointReliable(p)) return;
+    xs.push(p.x);
+    ys.push(p.y);
+  });
+
+  if (!xs.length || !ys.length) return null;
+
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys),
+    width: Math.max(...xs) - Math.min(...xs),
+    height: Math.max(...ys) - Math.min(...ys),
+    area:
+      (Math.max(...xs) - Math.min(...xs)) *
+      (Math.max(...ys) - Math.min(...ys)),
+  };
+}
+
 export default function App() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -183,6 +213,7 @@ export default function App() {
   const poseRef = useRef(null);
   const streamRef = useRef(null);
   const animationRef = useRef(null);
+  const frameIndexRef = useRef(0);
 
   const interactionRef = useRef({
     draggingPoint: false,
@@ -191,6 +222,9 @@ export default function App() {
     pointIndex: null,
     lastMouseNorm: null,
   });
+
+  const trackedPersonsRef = useRef([]);
+  const nextTrackIdRef = useRef(1);
 
   const rawPeopleHistoryRef = useRef([]);
   const rawWatchHistoryRef = useRef([]);
@@ -336,12 +370,13 @@ export default function App() {
       return Math.max(0.35, Math.min(1, alpha));
     }
 
-    function drawPose(ctx, peopleLandmarks, width, height) {
+    function drawPose(ctx, tracks, width, height) {
       if (!settingsRef.current.showSkeleton) return;
-      if (!peopleLandmarks || peopleLandmarks.length === 0) return;
+      if (!tracks.length) return;
 
-      peopleLandmarks.forEach((landmarks, personIndex) => {
-        const hue = (personIndex * 110) % 360;
+      tracks.forEach((track, index) => {
+        const landmarks = track.landmarks;
+        const hue = (index * 110) % 360;
 
         for (const [start, end] of CONNECTIONS) {
           const a = landmarks[start];
@@ -378,28 +413,19 @@ export default function App() {
       });
     }
 
-    function drawBoundingBox(ctx, peopleLandmarks, width, height) {
+    function drawBoundingBox(ctx, tracks, width, height) {
       if (!settingsRef.current.showBoundingBox) return;
 
-      peopleLandmarks.forEach((landmarks, personIndex) => {
-        const xs = [];
-        const ys = [];
-
-        landmarks.forEach((p) => {
-          if (!isPointReliable(p)) return;
-          xs.push(p.x * width);
-          ys.push(p.y * height);
-        });
-
-        if (xs.length === 0 || ys.length === 0) return;
-
-        const minX = Math.min(...xs);
-        const maxX = Math.max(...xs);
-        const minY = Math.min(...ys);
-        const maxY = Math.max(...ys);
+      tracks.forEach((track, index) => {
+        if (!track.bbox) return;
 
         const padding = 20;
-        const hue = (personIndex * 110) % 360;
+        const hue = (index * 110) % 360;
+
+        const minX = track.bbox.minX * width;
+        const maxX = track.bbox.maxX * width;
+        const minY = track.bbox.minY * height;
+        const maxY = track.bbox.maxY * height;
 
         ctx.strokeStyle = `hsl(${hue}, 100%, 60%)`;
         ctx.lineWidth = 3;
@@ -409,6 +435,10 @@ export default function App() {
           maxX - minX + padding * 2,
           maxY - minY + padding * 2
         );
+
+        ctx.fillStyle = `hsl(${hue}, 100%, 60%)`;
+        ctx.font = "bold 15px Arial";
+        ctx.fillText(`P${track.id}`, minX, Math.max(18, minY - 10));
       });
     }
 
@@ -477,12 +507,6 @@ export default function App() {
         x: (Math.min(...xs) + Math.max(...xs)) / 2,
         y: (Math.min(...ys) + Math.max(...ys)) / 2,
       };
-    }
-
-    function getAllPersonCenters(peopleLandmarks, width, height) {
-      return peopleLandmarks
-        .map((landmarks) => getPersonCenter(landmarks, width, height))
-        .filter(Boolean);
     }
 
     function getZoneFromCenter(center, width, height) {
@@ -573,7 +597,7 @@ export default function App() {
       if (torsoHeight <= 0) return "Unknown posture";
 
       const horizontalHeadOffset = Math.abs(nose.x - shoulderCenterX);
-      const headDown = nose.y > shoulderCenterY - 0.10;
+      const headDown = nose.y > shoulderCenterY - 0.1;
 
       if (horizontalHeadOffset > 0.08) {
         return "Body/Head turned";
@@ -685,6 +709,83 @@ export default function App() {
       setManningConfirmedText(candidateStatus);
     }
 
+    function updateTracks(detections) {
+      const frameIndex = frameIndexRef.current;
+      const tracks = trackedPersonsRef.current.map((track) => ({
+        ...track,
+      }));
+      const unmatchedTrackIndexes = new Set(tracks.map((_, index) => index));
+      const unmatchedDetectionIndexes = new Set(
+        detections.map((_, index) => index)
+      );
+
+      const candidatePairs = [];
+
+      tracks.forEach((track, trackIndex) => {
+        detections.forEach((det, detIndex) => {
+          const dx = track.centerNorm.x - det.centerNorm.x;
+          const dy = track.centerNorm.y - det.centerNorm.y;
+          const dist = Math.hypot(dx, dy);
+
+          if (dist <= TRACK_MATCH_DISTANCE) {
+            candidatePairs.push({ trackIndex, detIndex, dist });
+          }
+        });
+      });
+
+      candidatePairs.sort((a, b) => a.dist - b.dist);
+
+      candidatePairs.forEach(({ trackIndex, detIndex }) => {
+        if (
+          !unmatchedTrackIndexes.has(trackIndex) ||
+          !unmatchedDetectionIndexes.has(detIndex)
+        ) {
+          return;
+        }
+
+        const track = tracks[trackIndex];
+        const det = detections[detIndex];
+
+        track.landmarks = det.landmarks;
+        track.centerNorm = det.centerNorm;
+        track.bbox = det.bbox;
+        track.lastSeenFrame = frameIndex;
+        track.missingFrames = 0;
+        track.seenFrames += 1;
+        track.isConfirmed = track.seenFrames >= TRACK_CONFIRM_FRAMES;
+
+        unmatchedTrackIndexes.delete(trackIndex);
+        unmatchedDetectionIndexes.delete(detIndex);
+      });
+
+      unmatchedDetectionIndexes.forEach((detIndex) => {
+        const det = detections[detIndex];
+
+        tracks.push({
+          id: nextTrackIdRef.current++,
+          landmarks: det.landmarks,
+          centerNorm: det.centerNorm,
+          bbox: det.bbox,
+          lastSeenFrame: frameIndex,
+          missingFrames: 0,
+          seenFrames: 1,
+          isConfirmed: false,
+        });
+      });
+
+      unmatchedTrackIndexes.forEach((trackIndex) => {
+        const track = tracks[trackIndex];
+        track.missingFrames += 1;
+      });
+
+      const filtered = tracks.filter(
+        (track) => track.missingFrames <= TRACK_MAX_MISSING_FRAMES
+      );
+
+      trackedPersonsRef.current = filtered;
+      return filtered;
+    }
+
     async function init() {
       try {
         setStatus("Loading MediaPipe...");
@@ -701,7 +802,7 @@ export default function App() {
               "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
           },
           runningMode: "VIDEO",
-          numPoses: 3,
+          numPoses: 4,
         });
 
         if (!isMounted) return;
@@ -733,6 +834,8 @@ export default function App() {
     function loop() {
       if (!isMounted) return;
 
+      frameIndexRef.current += 1;
+
       const video = videoRef.current;
       const canvas = canvasRef.current;
 
@@ -750,24 +853,45 @@ export default function App() {
       const result = poseRef.current.detectForVideo(video, performance.now());
       const allLandmarks = result.landmarks ?? [];
 
-      const reliablePeople = allLandmarks.filter((personLandmarks) => {
-        const count = countReliablePoints(personLandmarks);
-        return count >= 8;
-      });
+      const detections = allLandmarks
+        .map((landmarks) => {
+          const reliableCount = countReliablePoints(landmarks);
+          if (reliableCount < 8) return null;
 
-      const rawPeopleCount = reliablePeople.length;
-      pushRollingValue(rawPeopleHistoryRef, rawPeopleCount);
-      const stablePeopleCount = getModeValue(rawPeopleHistoryRef.current, rawPeopleCount);
+          const bbox = getBBoxFromLandmarks(landmarks, isPointReliable);
+          if (!bbox) return null;
 
-      setPersonCountText(`${rawPeopleCount} / raw ${allLandmarks.length}`);
+          return {
+            landmarks,
+            centerNorm: {
+              x: (bbox.minX + bbox.maxX) / 2,
+              y: (bbox.minY + bbox.maxY) / 2,
+            },
+            bbox,
+            reliableCount,
+          };
+        })
+        .filter(Boolean);
+
+      const tracks = updateTracks(detections);
+      const confirmedTracks = tracks.filter((track) => track.isConfirmed);
+
+      const rawPeopleCount = detections.length;
+      const trackedPeopleCount = confirmedTracks.length;
+
+      pushRollingValue(rawPeopleHistoryRef, trackedPeopleCount);
+      const stablePeopleCount = getModeValue(
+        rawPeopleHistoryRef.current,
+        trackedPeopleCount
+      );
+
+      setPersonCountText(`${trackedPeopleCount} tracked / raw ${rawPeopleCount}`);
       setRawPeopleCountText(String(rawPeopleCount));
       setStablePeopleCountText(String(stablePeopleCount));
 
-      const landmarks = reliablePeople[0];
-
-      if (!landmarks) {
-        setPersonText("No person");
-        setQualityText("No detection");
+      if (!confirmedTracks.length) {
+        setPersonText("No confirmed person");
+        setQualityText("No stable detection");
         setVisiblePointsText("0");
         setZoneText("Outside defined zones");
         setDistanceText("Distance unknown");
@@ -784,6 +908,31 @@ export default function App() {
         return;
       }
 
+      let primaryTrack = null;
+
+      const watchTracks = confirmedTracks.filter((track) =>
+        isCenterInsideZone(
+          {
+            x: track.centerNorm.x * canvas.width,
+            y: track.centerNorm.y * canvas.height,
+          },
+          WATCH_ZONE_ID,
+          canvas.width,
+          canvas.height
+        )
+      );
+
+      if (watchTracks.length) {
+        primaryTrack = watchTracks.sort(
+          (a, b) => (b.bbox?.area || 0) - (a.bbox?.area || 0)
+        )[0];
+      } else {
+        primaryTrack = confirmedTracks.sort(
+          (a, b) => (b.bbox?.area || 0) - (a.bbox?.area || 0)
+        )[0];
+      }
+
+      const landmarks = primaryTrack.landmarks;
       const reliablePointCount = countReliablePoints(landmarks);
       const torso = getTorsoSize(landmarks, canvas.width, canvas.height);
       const posture = getPostureStatus(landmarks);
@@ -810,11 +959,15 @@ export default function App() {
         setDistanceText("Distance unknown");
       }
 
-      drawPose(ctx, reliablePeople, canvas.width, canvas.height);
-      drawBoundingBox(ctx, reliablePeople, canvas.width, canvas.height);
+      drawPose(ctx, confirmedTracks, canvas.width, canvas.height);
+      drawBoundingBox(ctx, confirmedTracks, canvas.width, canvas.height);
       drawZones(ctx, canvas.width, canvas.height);
 
-      const personCenter = getPersonCenter(landmarks, canvas.width, canvas.height);
+      const personCenter = {
+        x: primaryTrack.centerNorm.x * canvas.width,
+        y: primaryTrack.centerNorm.y * canvas.height,
+      };
+
       const currentZone = getZoneFromCenter(
         personCenter,
         canvas.width,
@@ -822,14 +975,21 @@ export default function App() {
       );
       setZoneText(currentZone);
 
-      const centers = getAllPersonCenters(
-        reliablePeople,
-        canvas.width,
-        canvas.height
-      );
+      const centers = confirmedTracks.map((track) => ({
+        x: track.centerNorm.x * canvas.width,
+        y: track.centerNorm.y * canvas.height,
+      }));
 
-      const rawWatchCount = centers.filter((center) =>
-        isCenterInsideZone(center, WATCH_ZONE_ID, canvas.width, canvas.height)
+      const rawWatchCount = confirmedTracks.filter((track) =>
+        isCenterInsideZone(
+          {
+            x: track.centerNorm.x * canvas.width,
+            y: track.centerNorm.y * canvas.height,
+          },
+          WATCH_ZONE_ID,
+          canvas.width,
+          canvas.height
+        )
       ).length;
 
       pushRollingValue(rawWatchHistoryRef, rawWatchCount);
@@ -849,13 +1009,13 @@ export default function App() {
       }
 
       if (reliablePointCount >= 16) {
-        setPersonText("Person detected");
+        setPersonText(`Primary person: P${primaryTrack.id}`);
         setQualityText("Strong detection");
       } else if (reliablePointCount >= 8) {
-        setPersonText("Person detected");
+        setPersonText(`Primary person: P${primaryTrack.id}`);
         setQualityText("Weak detection");
       } else {
-        setPersonText("Unstable person detection");
+        setPersonText(`Primary person: P${primaryTrack.id}`);
         setQualityText("Too noisy");
       }
 
