@@ -129,6 +129,7 @@ export default function App() {
   const [personText, setPersonText] = useState("No detection");
   const [qualityText, setQualityText] = useState("Unknown");
   const [visiblePointsText, setVisiblePointsText] = useState("0");
+  const [personCountText, setPersonCountText] = useState("0");
   const [zoneText, setZoneText] = useState("Outside defined zones");
   const [distanceText, setDistanceText] = useState("Stable distance");
   const [postureText, setPostureText] = useState("Upright posture");
@@ -240,73 +241,80 @@ export default function App() {
       return Math.max(0.35, Math.min(1, alpha));
     }
 
-    function drawPose(ctx, landmarks, width, height) {
+    function drawPose(ctx, peopleLandmarks, width, height) {
       if (!settingsRef.current.showSkeleton) return;
-      if (!landmarks || landmarks.length === 0) return;
-
-      for (const [start, end] of CONNECTIONS) {
-        const a = landmarks[start];
-        const b = landmarks[end];
-
-        if (!isPointReliable(a) || !isPointReliable(b)) continue;
-
-        const avgAlpha = (depthAlpha(a) + depthAlpha(b)) / 2;
-        const lineWidth = settingsRef.current.depthMode
-          ? (depthRadius(a) + depthRadius(b)) / 4
-          : 3;
-
-        ctx.strokeStyle = `rgba(0, 229, 255, ${avgAlpha})`;
-        ctx.lineWidth = lineWidth;
-        ctx.beginPath();
-        ctx.moveTo(a.x * width, a.y * height);
-        ctx.lineTo(b.x * width, b.y * height);
-        ctx.stroke();
-      }
-
-      landmarks.forEach((point) => {
-        if (!isPointReliable(point)) return;
-
-        const x = point.x * width;
-        const y = point.y * height;
-        const radius = depthRadius(point);
-        const alpha = depthAlpha(point);
-
-        ctx.fillStyle = `rgba(255, 45, 85, ${alpha})`;
-        ctx.beginPath();
-        ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.fill();
+      if (!peopleLandmarks || peopleLandmarks.length === 0) return;
+    
+      peopleLandmarks.forEach((landmarks, personIndex) => {
+        const hue = (personIndex * 110) % 360;
+    
+        for (const [start, end] of CONNECTIONS) {
+          const a = landmarks[start];
+          const b = landmarks[end];
+    
+          if (!isPointReliable(a) || !isPointReliable(b)) continue;
+    
+          const avgAlpha = (depthAlpha(a) + depthAlpha(b)) / 2;
+          const lineWidth = settingsRef.current.depthMode
+            ? (depthRadius(a) + depthRadius(b)) / 4
+            : 3;
+    
+          ctx.strokeStyle = `hsla(${hue}, 100%, 60%, ${avgAlpha})`;
+          ctx.lineWidth = lineWidth;
+          ctx.beginPath();
+          ctx.moveTo(a.x * width, a.y * height);
+          ctx.lineTo(b.x * width, b.y * height);
+          ctx.stroke();
+        }
+    
+        landmarks.forEach((point) => {
+          if (!isPointReliable(point)) return;
+    
+          const x = point.x * width;
+          const y = point.y * height;
+          const radius = depthRadius(point);
+          const alpha = depthAlpha(point);
+    
+          ctx.fillStyle = `hsla(${hue}, 100%, 65%, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        });
       });
     }
 
-    function drawBoundingBox(ctx, landmarks, width, height) {
+    function drawBoundingBox(ctx, peopleLandmarks, width, height) {
       if (!settingsRef.current.showBoundingBox) return;
-
-      const xs = [];
-      const ys = [];
-
-      landmarks.forEach((p) => {
-        if (!isPointReliable(p)) return;
-        xs.push(p.x * width);
-        ys.push(p.y * height);
+    
+      peopleLandmarks.forEach((landmarks, personIndex) => {
+        const xs = [];
+        const ys = [];
+    
+        landmarks.forEach((p) => {
+          if (!isPointReliable(p)) return;
+          xs.push(p.x * width);
+          ys.push(p.y * height);
+        });
+    
+        if (xs.length === 0 || ys.length === 0) return;
+    
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+    
+        const padding = 20;
+        const hue = (personIndex * 110) % 360;
+    
+        ctx.strokeStyle = `hsl(${hue}, 100%, 60%)`;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(
+          minX - padding,
+          minY - padding,
+          maxX - minX + padding * 2,
+          maxY - minY + padding * 2
+        );
       });
-
-      if (xs.length === 0 || ys.length === 0) return;
-
-      const minX = Math.min(...xs);
-      const maxX = Math.max(...xs);
-      const minY = Math.min(...ys);
-      const maxY = Math.max(...ys);
-
-      const padding = 20;
-
-      ctx.strokeStyle = "#00ff88";
-      ctx.lineWidth = 3;
-      ctx.strokeRect(
-        minX - padding,
-        minY - padding,
-        maxX - minX + padding * 2,
-        maxY - minY + padding * 2
-      );
     }
 
     function drawZones(ctx, width, height) {
@@ -374,6 +382,12 @@ export default function App() {
         x: (Math.min(...xs) + Math.max(...xs)) / 2,
         y: (Math.min(...ys) + Math.max(...ys)) / 2,
       };
+    }
+
+    function getAllPersonCenters(peopleLandmarks, width, height) {
+      return peopleLandmarks
+        .map((landmarks) => getPersonCenter(landmarks, width, height))
+        .filter(Boolean);
     }
 
     function getZoneFromCenter(center, width, height) {
@@ -481,7 +495,7 @@ export default function App() {
               "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
           },
           runningMode: "VIDEO",
-          numPoses: 1,
+          numPoses: 3,
         });
 
         if (!isMounted) return;
@@ -528,19 +542,30 @@ export default function App() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const result = poseRef.current.detectForVideo(video, performance.now());
-      const landmarks = result.landmarks?.[0];
+
+      const allLandmarks = result.landmarks ?? [];
+      
+      const reliablePeople = allLandmarks.filter((personLandmarks) => {
+        const count = countReliablePoints(personLandmarks);
+        return count >= 8;
+      });
+      
+      setPersonCountText(`${reliablePeople.length} / raw ${allLandmarks.length}`);
+      
+      const landmarks = reliablePeople[0];
 
       if (!landmarks) {
         setPersonText("No person");
         setQualityText("No detection");
         setVisiblePointsText("0");
+        setPersonCountText("0");
         setZoneText("Outside defined zones");
         setDistanceText("Distance unknown");
         setPostureText("Unknown posture");
         previousTorsoSizeRef.current = null;
-
+      
         drawZones(ctx, canvas.width, canvas.height);
-
+      
         animationRef.current = requestAnimationFrame(loop);
         return;
       }
@@ -571,10 +596,10 @@ export default function App() {
         setDistanceText("Distance unknown");
       }
 
-      drawPose(ctx, landmarks, canvas.width, canvas.height);
-      drawBoundingBox(ctx, landmarks, canvas.width, canvas.height);
+      drawPose(ctx, reliablePeople, canvas.width, canvas.height);
+      drawBoundingBox(ctx, reliablePeople, canvas.width, canvas.height);
       drawZones(ctx, canvas.width, canvas.height);
-
+      
       const personCenter = getPersonCenter(landmarks, canvas.width, canvas.height);
       const currentZone = getZoneFromCenter(
         personCenter,
@@ -582,12 +607,22 @@ export default function App() {
         canvas.height
       );
       setZoneText(currentZone);
-
-      if (personCenter && settingsRef.current.showCenterPoint) {
-        ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.arc(personCenter.x, personCenter.y, 6, 0, Math.PI * 2);
-        ctx.fill();
+      
+      if (settingsRef.current.showCenterPoint) {
+        const centers = getAllPersonCenters(
+          reliablePeople,
+          canvas.width,
+          canvas.height
+        );
+      
+        centers.forEach((center, index) => {
+          const hue = (index * 110) % 360;
+      
+          ctx.fillStyle = `hsl(${hue}, 100%, 85%)`;
+          ctx.beginPath();
+          ctx.arc(center.x, center.y, 6, 0, Math.PI * 2);
+          ctx.fill();
+        });
       }
 
       if (reliablePointCount >= 16) {
@@ -1255,6 +1290,7 @@ export default function App() {
             <div>{personText}</div>
             <div>{qualityText}</div>
             <div>Reliable points: {visiblePointsText}</div>
+            <div>Persons detected: {personCountText}</div>
             <div>Zone: {zoneText}</div>
             <div>Distance: {distanceText}</div>
             <div>Posture: {postureText}</div>
