@@ -456,10 +456,28 @@ export default function App() {
       ctx.font = "bold 14px Arial";
     
       detections.forEach((det, index) => {
-        const x = (mirrorView ? 1 - det.x - det.w : det.x) * width;
-        const y = det.y * height;
-        const w = det.w * width;
-        const h = det.h * height;
+        const videoW = videoRef.current.videoWidth;
+        const videoH = videoRef.current.videoHeight;
+        
+        // normalize → gerçek video boyutuna çevir
+        let x = det.x * videoW;
+        let y = det.y * videoH;
+        let w = det.w * videoW;
+        let h = det.h * videoH;
+        
+        // mirror fix
+        if (mirrorView) {
+          x = videoW - x - w;
+        }
+        
+        // canvas scale
+        const scaleX = width / videoW;
+        const scaleY = height / videoH;
+        
+        x *= scaleX;
+        y *= scaleY;
+        w *= scaleX;
+        h *= scaleY;
     
         ctx.strokeRect(x, y, w, h);
         ctx.fillText(
