@@ -23,6 +23,8 @@ const DEFAULT_MIN_VISIBILITY = 0.55;
 const DEFAULT_MIN_PRESENCE = 0.55;
 const HANDLE_RADIUS = 10;
 const WATCH_ZONE_ID = "frontWatch";
+const STAGE_WIDTH = 960;
+const STAGE_HEIGHT = 540;
 
 const COUNT_HISTORY_SIZE = 12;
 const MANNING_CONFIRM_FRAMES = 10;
@@ -230,6 +232,7 @@ export default function App() {
   const rawPeopleHistoryRef = useRef([]);
   const rawWatchHistoryRef = useRef([]);
   const watchModeRef = useRef("DAY");
+  const mirrorViewRef = useRef(true);
 
   const manningStateRef = useRef({
     candidateStatus: null,
@@ -327,6 +330,10 @@ export default function App() {
   useEffect(() => {
     watchModeRef.current = watchMode;
   }, [watchMode]);
+
+  useEffect(() => {
+    mirrorViewRef.current = mirrorView;
+  }, [mirrorView]);
 
   useEffect(() => {
     let isMounted = true;
@@ -447,16 +454,25 @@ export default function App() {
     }
 
     function drawYoloBoxes(ctx, detections, width, height) {
-      if (!detections.length) return;
-    
       ctx.save();
-    
-      // TEST AMAÇLI SABİT KUTU
       ctx.strokeStyle = "red";
       ctx.lineWidth = 3;
+      ctx.strokeRect(50, 50, 120, 120);
     
-      // Ortaya bir kutu çiz (bu görünmezse canvas sorunu var)
-      ctx.strokeRect(width / 2 - 50, height / 2 - 50, 100, 100);
+      if (!detections.length) {
+        ctx.restore();
+        return;
+      }
+    
+      detections.forEach((det, index) => {
+        const x = (mirrorViewRef.current ? 1 - det.x - det.w : det.x) * width;
+        const y = det.y * height;
+        const w = det.w * width;
+        const h = det.h * height;
+    
+        ctx.strokeRect(x, y, w, h);
+        ctx.fillText(`Y${index + 1} ${(det.score * 100).toFixed(0)}%`, x, Math.max(16, y - 6));
+      });
     
       ctx.restore();
     }
@@ -867,8 +883,8 @@ export default function App() {
       }
 
       const ctx = canvas.getContext("2d");
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
+      canvas.width = STAGE_WIDTH;
+      canvas.height = STAGE_HEIGHT;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const yoloDetections = await detectPeople(video);
@@ -1811,44 +1827,51 @@ setYoloCountText(String(yoloDetections.length));
           </div>
 
           <div
-            style={{
-              position: "relative",
-              width: "100%",
-              maxWidth: 980,
-              borderRadius: 14,
-              overflow: "hidden",
-              background: "#06122b",
-              border: "1px solid #173462",
-            }}
-          >
-            <video
-              ref={videoRef}
-              playsInline
-              muted
-              style={{
-                width: "100%",
-                display: "block",
-                transform: mirrorView ? "scaleX(-1)" : "none",
-                opacity: showVideo ? 1 : 0,
-              }}
-            />
+  style={{
+    position: "relative",
+    width: "100%",
+    maxWidth: STAGE_WIDTH,
+    aspectRatio: `${STAGE_WIDTH} / ${STAGE_HEIGHT}`,
+    borderRadius: 14,
+    overflow: "hidden",
+    background: "#06122b",
+    border: "1px solid #173462",
+  }}
+>
+<video
+  ref={videoRef}
+  playsInline
+  muted
+  style={{
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+    transform: mirrorView ? "scaleX(-1)" : "none",
+    opacity: showVideo ? 1 : 0,
+    zIndex: 1,
+  }}
+/>
 
-            <canvas
-              ref={canvasRef}
-              onMouseDown={handleCanvasMouseDown}
-              onMouseMove={handleCanvasMouseMove}
-              onMouseUp={handleCanvasMouseUp}
-              onMouseLeave={handleCanvasMouseUp}
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                pointerEvents: "auto",
-                transform: mirrorView ? "scaleX(-1)" : "none",
-                cursor: "crosshair",
-              }}
-            />
+<canvas
+  ref={canvasRef}
+  onMouseDown={handleCanvasMouseDown}
+  onMouseMove={handleCanvasMouseMove}
+  onMouseUp={handleCanvasMouseUp}
+  onMouseLeave={handleCanvasMouseUp}
+  style={{
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    pointerEvents: "auto",
+    transform: mirrorView ? "scaleX(-1)" : "none",
+    cursor: "crosshair",
+    zIndex: 3,
+  }}
+/>
           </div>
         </div>
       </div>
