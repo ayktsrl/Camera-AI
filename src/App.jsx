@@ -463,16 +463,10 @@ export default function App() {
       ctx.font = "bold 14px Arial";
     
       detections.forEach((det, index) => {
-        // YOLO pixel format: x, y, width, height
-        let x = det.x;
-        let y = det.y;
-        let w = det.width || det.w;
-        let h = det.height || det.h;
-    
-        // mirror düzeltmesi
-        if (mirrorViewRef.current) {
-          x = width - x - w;
-        }
+        const x = det.x * width;
+        const y = det.y * height;
+        const w = (det.width || det.w) * width;
+        const h = (det.height || det.h) * height;
     
         ctx.strokeRect(x, y, w, h);
         ctx.fillText(`Y${index + 1}`, x, Math.max(16, y - 6));
