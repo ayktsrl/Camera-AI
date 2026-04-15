@@ -996,6 +996,7 @@ setYoloCountText(String(yoloDetections.length));
 
       drawPose(ctx, confirmedTracks, canvas.width, canvas.height);
       drawBoundingBox(ctx, confirmedTracks, canvas.width, canvas.height);
+      console.log("YOLO:", yoloDetections);
       drawYoloBoxes(ctx, yoloDetections, canvas.width, canvas.height);
       drawZones(ctx, canvas.width, canvas.height);
 
