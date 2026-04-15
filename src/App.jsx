@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./index.css";
+import { loadYoloModel, detectPeople } from "./YoloDetector";
 
 const CONNECTIONS = [
   [11, 12],
@@ -258,6 +259,7 @@ export default function App() {
   const [manningCandidateText, setManningCandidateText] = useState("UNKNOWN");
   const [manningConfirmedText, setManningConfirmedText] = useState("UNKNOWN");
   const [manningLogs, setManningLogs] = useState([]);
+  const [yoloCountText, setYoloCountText] = useState("0");
 
   const [showVideo, setShowVideo] = useState(true);
   const [showSkeleton, setShowSkeleton] = useState(true);
@@ -311,6 +313,8 @@ export default function App() {
     minVisibility,
     minPresence,
   ]);
+
+
 
   useEffect(() => {
     selectedZoneIdRef.current = selectedZoneId;
@@ -440,6 +444,32 @@ export default function App() {
         ctx.font = "bold 15px Arial";
         ctx.fillText(`P${track.id}`, minX, Math.max(18, minY - 10));
       });
+    }
+
+    function drawYoloBoxes(ctx, detections, width, height) {
+      if (!detections.length) return;
+    
+      ctx.save();
+      ctx.strokeStyle = "#00ff00";
+      ctx.fillStyle = "#00ff00";
+      ctx.lineWidth = 2;
+      ctx.font = "bold 14px Arial";
+    
+      detections.forEach((det, index) => {
+        const x = det.x * width;
+        const y = det.y * height;
+        const w = det.w * width;
+        const h = det.h * height;
+    
+        ctx.strokeRect(x, y, w, h);
+        ctx.fillText(
+          `Y${index + 1} ${(det.score * 100).toFixed(0)}%`,
+          x,
+          Math.max(16, y - 6)
+        );
+      });
+    
+      ctx.restore();
     }
 
     function drawZones(ctx, width, height) {
@@ -791,6 +821,9 @@ export default function App() {
         setStatus("Loading MediaPipe...");
 
         const vision = await waitForVision();
+        setStatus("Loading YOLO...");
+        await loadYoloModel();
+        setStatus("Loading MediaPipe...");
 
         const fileset = await vision.FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
@@ -831,8 +864,8 @@ export default function App() {
       }
     }
 
-    function loop() {
-      if (!isMounted) return;
+    async function loop() {
+            if (!isMounted) return;
 
       frameIndexRef.current += 1;
 
@@ -849,6 +882,8 @@ export default function App() {
       canvas.height = video.videoHeight || 480;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const yoloDetections = await detectPeople(video);
+setYoloCountText(String(yoloDetections.length));
 
       const result = poseRef.current.detectForVideo(video, performance.now());
       const allLandmarks = result.landmarks ?? [];
@@ -961,6 +996,7 @@ export default function App() {
 
       drawPose(ctx, confirmedTracks, canvas.width, canvas.height);
       drawBoundingBox(ctx, confirmedTracks, canvas.width, canvas.height);
+      drawYoloBoxes(ctx, yoloDetections, canvas.width, canvas.height);
       drawZones(ctx, canvas.width, canvas.height);
 
       const personCenter = {
@@ -1761,6 +1797,7 @@ export default function App() {
             <div>{qualityText}</div>
             <div>Reliable points: {visiblePointsText}</div>
             <div>Persons detected: {personCountText}</div>
+            <div>YOLO persons: {yoloCountText}</div>
             <div>Raw persons: {rawPeopleCountText}</div>
             <div>Stable persons: {stablePeopleCountText}</div>
             <div>Zone: {zoneText}</div>
