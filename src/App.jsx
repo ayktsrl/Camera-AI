@@ -454,24 +454,28 @@ export default function App() {
     }
 
     function drawYoloBoxes(ctx, detections, width, height) {
-      ctx.save();
-      ctx.strokeStyle = "red";
-      ctx.lineWidth = 3;
-      ctx.strokeRect(50, 50, 120, 120);
+      if (!detections.length) return;
     
-      if (!detections.length) {
-        ctx.restore();
-        return;
-      }
+      ctx.save();
+      ctx.strokeStyle = "#00ff00";
+      ctx.fillStyle = "#00ff00";
+      ctx.lineWidth = 2;
+      ctx.font = "bold 14px Arial";
     
       detections.forEach((det, index) => {
-        const x = (mirrorViewRef.current ? 1 - det.x - det.w : det.x) * width;
-        const y = det.y * height;
-        const w = det.w * width;
-        const h = det.h * height;
+        // YOLO pixel format: x, y, width, height
+        let x = det.x;
+        let y = det.y;
+        let w = det.width || det.w;
+        let h = det.height || det.h;
+    
+        // mirror düzeltmesi
+        if (mirrorViewRef.current) {
+          x = width - x - w;
+        }
     
         ctx.strokeRect(x, y, w, h);
-        ctx.fillText(`Y${index + 1} ${(det.score * 100).toFixed(0)}%`, x, Math.max(16, y - 6));
+        ctx.fillText(`Y${index + 1}`, x, Math.max(16, y - 6));
       });
     
       ctx.restore();
@@ -888,6 +892,7 @@ export default function App() {
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const yoloDetections = await detectPeople(video);
+      console.log("YOLO RAW:", yoloDetections);
 setYoloCountText(String(yoloDetections.length));
 
       const result = poseRef.current.detectForVideo(video, performance.now());
