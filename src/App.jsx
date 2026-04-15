@@ -21,6 +21,10 @@ const CONNECTIONS = [
 const DEFAULT_MIN_VISIBILITY = 0.55;
 const DEFAULT_MIN_PRESENCE = 0.55;
 const HANDLE_RADIUS = 10;
+const WATCH_ZONE_ID = "frontWatch";
+
+const COUNT_HISTORY_SIZE = 12;
+const MANNING_CONFIRM_FRAMES = 10;
 
 const DEFAULT_ZONES = [
   {
@@ -109,6 +113,69 @@ function buttonStyle(bg) {
   };
 }
 
+function formatClock(date) {
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function formatDurationMs(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function pushRollingValue(ref, value, maxSize = COUNT_HISTORY_SIZE) {
+  ref.current.push(value);
+  if (ref.current.length > maxSize) {
+    ref.current.shift();
+  }
+}
+
+function getModeValue(values, fallback = 0) {
+  if (!values.length) return fallback;
+
+  const counts = new Map();
+  for (const value of values) {
+    counts.set(value, (counts.get(value) || 0) + 1);
+  }
+
+  let bestValue = fallback;
+  let bestCount = -1;
+
+  for (const [value, count] of counts.entries()) {
+    if (count > bestCount) {
+      bestValue = value;
+      bestCount = count;
+    } else if (count === bestCount && value > bestValue) {
+      bestValue = value;
+    }
+  }
+
+  return bestValue;
+}
+
+function getManningStatus(mode, actualCount) {
+  const requiredCount = mode === "NIGHT" ? 2 : 1;
+
+  if (actualCount >= requiredCount) {
+    return mode === "NIGHT"
+      ? "WATCH_MANNING_OK_NIGHT"
+      : "WATCH_MANNING_OK_DAY";
+  }
+
+  return mode === "NIGHT"
+    ? "WATCH_MANNING_INSUFFICIENT_NIGHT"
+    : "WATCH_MANNING_INSUFFICIENT_DAY";
+}
+
 export default function App() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -125,6 +192,20 @@ export default function App() {
     lastMouseNorm: null,
   });
 
+  const rawPeopleHistoryRef = useRef([]);
+  const rawWatchHistoryRef = useRef([]);
+  const watchModeRef = useRef("DAY");
+
+  const manningStateRef = useRef({
+    candidateStatus: null,
+    candidateFrames: 0,
+    confirmedStatus: null,
+    confirmedStartedAt: null,
+    confirmedRequired: 0,
+    confirmedActual: 0,
+    confirmedMode: "DAY",
+  });
+
   const [status, setStatus] = useState("Loading...");
   const [personText, setPersonText] = useState("No detection");
   const [qualityText, setQualityText] = useState("Unknown");
@@ -133,6 +214,16 @@ export default function App() {
   const [zoneText, setZoneText] = useState("Outside defined zones");
   const [distanceText, setDistanceText] = useState("Stable distance");
   const [postureText, setPostureText] = useState("Upright posture");
+
+  const [watchMode, setWatchMode] = useState("DAY");
+  const [rawWatchZoneCountText, setRawWatchZoneCountText] = useState("0");
+  const [stableWatchZoneCountText, setStableWatchZoneCountText] = useState("0");
+  const [rawPeopleCountText, setRawPeopleCountText] = useState("0");
+  const [stablePeopleCountText, setStablePeopleCountText] = useState("0");
+  const [requiredWatchCountText, setRequiredWatchCountText] = useState("1");
+  const [manningCandidateText, setManningCandidateText] = useState("UNKNOWN");
+  const [manningConfirmedText, setManningConfirmedText] = useState("UNKNOWN");
+  const [manningLogs, setManningLogs] = useState([]);
 
   const [showVideo, setShowVideo] = useState(true);
   const [showSkeleton, setShowSkeleton] = useState(true);
@@ -196,6 +287,10 @@ export default function App() {
   }, [selectedPointIndex]);
 
   useEffect(() => {
+    watchModeRef.current = watchMode;
+  }, [watchMode]);
+
+  useEffect(() => {
     let isMounted = true;
 
     async function waitForVision(maxWaitMs = 10000) {
@@ -244,21 +339,21 @@ export default function App() {
     function drawPose(ctx, peopleLandmarks, width, height) {
       if (!settingsRef.current.showSkeleton) return;
       if (!peopleLandmarks || peopleLandmarks.length === 0) return;
-    
+
       peopleLandmarks.forEach((landmarks, personIndex) => {
         const hue = (personIndex * 110) % 360;
-    
+
         for (const [start, end] of CONNECTIONS) {
           const a = landmarks[start];
           const b = landmarks[end];
-    
+
           if (!isPointReliable(a) || !isPointReliable(b)) continue;
-    
+
           const avgAlpha = (depthAlpha(a) + depthAlpha(b)) / 2;
           const lineWidth = settingsRef.current.depthMode
             ? (depthRadius(a) + depthRadius(b)) / 4
             : 3;
-    
+
           ctx.strokeStyle = `hsla(${hue}, 100%, 60%, ${avgAlpha})`;
           ctx.lineWidth = lineWidth;
           ctx.beginPath();
@@ -266,15 +361,15 @@ export default function App() {
           ctx.lineTo(b.x * width, b.y * height);
           ctx.stroke();
         }
-    
+
         landmarks.forEach((point) => {
           if (!isPointReliable(point)) return;
-    
+
           const x = point.x * width;
           const y = point.y * height;
           const radius = depthRadius(point);
           const alpha = depthAlpha(point);
-    
+
           ctx.fillStyle = `hsla(${hue}, 100%, 65%, ${alpha})`;
           ctx.beginPath();
           ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -285,27 +380,27 @@ export default function App() {
 
     function drawBoundingBox(ctx, peopleLandmarks, width, height) {
       if (!settingsRef.current.showBoundingBox) return;
-    
+
       peopleLandmarks.forEach((landmarks, personIndex) => {
         const xs = [];
         const ys = [];
-    
+
         landmarks.forEach((p) => {
           if (!isPointReliable(p)) return;
           xs.push(p.x * width);
           ys.push(p.y * height);
         });
-    
+
         if (xs.length === 0 || ys.length === 0) return;
-    
+
         const minX = Math.min(...xs);
         const maxX = Math.max(...xs);
         const minY = Math.min(...ys);
         const maxY = Math.max(...ys);
-    
+
         const padding = 20;
         const hue = (personIndex * 110) % 360;
-    
+
         ctx.strokeStyle = `hsl(${hue}, 100%, 60%)`;
         ctx.lineWidth = 3;
         ctx.strokeRect(
@@ -407,6 +502,18 @@ export default function App() {
       return "Outside defined zones";
     }
 
+    function isCenterInsideZone(center, zoneId, width, height) {
+      if (!center) return false;
+
+      const zone = zonesRef.current.find((z) => z.id === zoneId);
+      if (!zone) return false;
+
+      return pointInPolygon(
+        { x: center.x / width, y: center.y / height },
+        zone.points
+      );
+    }
+
     function getTorsoSize(landmarks, width, height) {
       const leftShoulder = landmarks[11];
       const rightShoulder = landmarks[12];
@@ -479,6 +586,105 @@ export default function App() {
       return "Upright posture";
     }
 
+    function updateManningState(rawActualCount, stableActualCount) {
+      const now = new Date();
+      const mode = watchModeRef.current;
+      const requiredCount = mode === "NIGHT" ? 2 : 1;
+
+      setRawWatchZoneCountText(String(rawActualCount));
+      setStableWatchZoneCountText(String(stableActualCount));
+      setRequiredWatchCountText(String(requiredCount));
+
+      const candidateStatus = getManningStatus(mode, stableActualCount);
+      setManningCandidateText(candidateStatus);
+
+      const current = manningStateRef.current;
+
+      if (current.confirmedStatus === null) {
+        manningStateRef.current = {
+          candidateStatus,
+          candidateFrames: MANNING_CONFIRM_FRAMES,
+          confirmedStatus: candidateStatus,
+          confirmedStartedAt: now,
+          confirmedRequired: requiredCount,
+          confirmedActual: stableActualCount,
+          confirmedMode: mode,
+        };
+        setManningConfirmedText(candidateStatus);
+        return;
+      }
+
+      if (
+        current.candidateStatus === candidateStatus &&
+        current.confirmedActual === stableActualCount &&
+        current.confirmedMode === mode
+      ) {
+        if (current.confirmedStatus === candidateStatus) {
+          setManningConfirmedText(current.confirmedStatus);
+          return;
+        }
+      }
+
+      if (current.confirmedStatus === candidateStatus) {
+        manningStateRef.current = {
+          ...current,
+          candidateStatus,
+          candidateFrames: 0,
+          confirmedRequired: requiredCount,
+          confirmedActual: stableActualCount,
+          confirmedMode: mode,
+        };
+        setManningConfirmedText(candidateStatus);
+        return;
+      }
+
+      if (current.candidateStatus !== candidateStatus) {
+        manningStateRef.current = {
+          ...current,
+          candidateStatus,
+          candidateFrames: 1,
+        };
+        setManningConfirmedText(current.confirmedStatus);
+        return;
+      }
+
+      const nextFrames = current.candidateFrames + 1;
+
+      if (nextFrames < MANNING_CONFIRM_FRAMES) {
+        manningStateRef.current = {
+          ...current,
+          candidateFrames: nextFrames,
+        };
+        setManningConfirmedText(current.confirmedStatus);
+        return;
+      }
+
+      const closedLog = {
+        id: `${current.confirmedStartedAt?.getTime?.() || Date.now()}_${Math.random()}`,
+        start: formatClock(current.confirmedStartedAt),
+        end: formatClock(now),
+        duration: formatDurationMs(now - current.confirmedStartedAt),
+        mode: current.confirmedMode,
+        required: current.confirmedRequired,
+        actual: current.confirmedActual,
+        status: current.confirmedStatus,
+      };
+
+      setManningLogs((prev) => [closedLog, ...prev].slice(0, 30));
+
+      manningStateRef.current = {
+        candidateStatus,
+        candidateFrames: 0,
+        confirmedStatus: candidateStatus,
+        confirmedStartedAt: now,
+        confirmedRequired: requiredCount,
+        confirmedActual: stableActualCount,
+        confirmedMode: mode,
+      };
+
+      setManningConfirmedText(candidateStatus);
+    }
+
     async function init() {
       try {
         setStatus("Loading MediaPipe...");
@@ -542,30 +748,38 @@ export default function App() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const result = poseRef.current.detectForVideo(video, performance.now());
-
       const allLandmarks = result.landmarks ?? [];
-      
+
       const reliablePeople = allLandmarks.filter((personLandmarks) => {
         const count = countReliablePoints(personLandmarks);
         return count >= 8;
       });
-      
-      setPersonCountText(`${reliablePeople.length} / raw ${allLandmarks.length}`);
-      
+
+      const rawPeopleCount = reliablePeople.length;
+      pushRollingValue(rawPeopleHistoryRef, rawPeopleCount);
+      const stablePeopleCount = getModeValue(rawPeopleHistoryRef.current, rawPeopleCount);
+
+      setPersonCountText(`${rawPeopleCount} / raw ${allLandmarks.length}`);
+      setRawPeopleCountText(String(rawPeopleCount));
+      setStablePeopleCountText(String(stablePeopleCount));
+
       const landmarks = reliablePeople[0];
 
       if (!landmarks) {
         setPersonText("No person");
         setQualityText("No detection");
         setVisiblePointsText("0");
-        setPersonCountText("0");
         setZoneText("Outside defined zones");
         setDistanceText("Distance unknown");
         setPostureText("Unknown posture");
         previousTorsoSizeRef.current = null;
-      
+
+        pushRollingValue(rawWatchHistoryRef, 0);
+        const stableWatchCount = getModeValue(rawWatchHistoryRef.current, 0);
+        updateManningState(0, stableWatchCount);
+
         drawZones(ctx, canvas.width, canvas.height);
-      
+
         animationRef.current = requestAnimationFrame(loop);
         return;
       }
@@ -599,7 +813,7 @@ export default function App() {
       drawPose(ctx, reliablePeople, canvas.width, canvas.height);
       drawBoundingBox(ctx, reliablePeople, canvas.width, canvas.height);
       drawZones(ctx, canvas.width, canvas.height);
-      
+
       const personCenter = getPersonCenter(landmarks, canvas.width, canvas.height);
       const currentZone = getZoneFromCenter(
         personCenter,
@@ -607,17 +821,26 @@ export default function App() {
         canvas.height
       );
       setZoneText(currentZone);
-      
+
+      const centers = getAllPersonCenters(
+        reliablePeople,
+        canvas.width,
+        canvas.height
+      );
+
+      const rawWatchCount = centers.filter((center) =>
+        isCenterInsideZone(center, WATCH_ZONE_ID, canvas.width, canvas.height)
+      ).length;
+
+      pushRollingValue(rawWatchHistoryRef, rawWatchCount);
+      const stableWatchCount = getModeValue(rawWatchHistoryRef.current, rawWatchCount);
+
+      updateManningState(rawWatchCount, stableWatchCount);
+
       if (settingsRef.current.showCenterPoint) {
-        const centers = getAllPersonCenters(
-          reliablePeople,
-          canvas.width,
-          canvas.height
-        );
-      
         centers.forEach((center, index) => {
           const hue = (index * 110) % 360;
-      
+
           ctx.fillStyle = `hsl(${hue}, 100%, 85%)`;
           ctx.beginPath();
           ctx.arc(center.x, center.y, 6, 0, Math.PI * 2);
@@ -941,6 +1164,12 @@ export default function App() {
   }
 
   const selectedZone = zones.find((z) => z.id === selectedZoneId);
+  const activeManningDuration =
+    manningStateRef.current.confirmedStartedAt
+      ? formatDurationMs(
+          Date.now() - manningStateRef.current.confirmedStartedAt.getTime()
+        )
+      : "0s";
 
   return (
     <div
@@ -956,7 +1185,7 @@ export default function App() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "380px 1fr",
+          gridTemplateColumns: "420px 1fr",
           gap: 20,
           alignItems: "start",
         }}
@@ -1045,6 +1274,35 @@ export default function App() {
               />{" "}
               Add point mode
             </label>
+          </div>
+
+          <h4 style={{ marginBottom: 8 }}>Watch Mode</h4>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
+              marginBottom: 18,
+            }}
+          >
+            <button
+              onClick={() => setWatchMode("DAY")}
+              style={{
+                ...buttonStyle(watchMode === "DAY" ? "#2563eb" : "#334155"),
+              }}
+            >
+              Day Mode
+            </button>
+
+            <button
+              onClick={() => setWatchMode("NIGHT")}
+              style={{
+                ...buttonStyle(watchMode === "NIGHT" ? "#7c3aed" : "#334155"),
+              }}
+            >
+              Night Mode
+            </button>
           </div>
 
           <h4 style={{ marginBottom: 8 }}>Detection thresholds</h4>
@@ -1169,6 +1427,7 @@ export default function App() {
               overflowX: "auto",
               border: "1px solid #173462",
               borderRadius: 10,
+              marginBottom: 18,
             }}
           >
             <table
@@ -1273,6 +1532,57 @@ export default function App() {
               </tbody>
             </table>
           </div>
+
+          <h4 style={{ marginBottom: 8 }}>Manning Log</h4>
+
+          <div
+            style={{
+              overflowX: "auto",
+              border: "1px solid #173462",
+              borderRadius: 10,
+            }}
+          >
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: 12,
+              }}
+            >
+              <thead style={{ background: "#0b2148" }}>
+                <tr>
+                  <th style={thStyle}>Start</th>
+                  <th style={thStyle}>End</th>
+                  <th style={thStyle}>Dur.</th>
+                  <th style={thStyle}>Mode</th>
+                  <th style={thStyle}>Req</th>
+                  <th style={thStyle}>Act</th>
+                  <th style={thStyle}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {manningLogs.length === 0 ? (
+                  <tr>
+                    <td style={tdStyle} colSpan={7}>
+                      Henüz log yok
+                    </td>
+                  </tr>
+                ) : (
+                  manningLogs.map((log) => (
+                    <tr key={log.id}>
+                      <td style={tdStyle}>{log.start}</td>
+                      <td style={tdStyle}>{log.end}</td>
+                      <td style={tdStyle}>{log.duration}</td>
+                      <td style={tdStyle}>{log.mode}</td>
+                      <td style={tdStyle}>{log.required}</td>
+                      <td style={tdStyle}>{log.actual}</td>
+                      <td style={tdStyle}>{log.status}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div>
@@ -1291,10 +1601,19 @@ export default function App() {
             <div>{qualityText}</div>
             <div>Reliable points: {visiblePointsText}</div>
             <div>Persons detected: {personCountText}</div>
+            <div>Raw persons: {rawPeopleCountText}</div>
+            <div>Stable persons: {stablePeopleCountText}</div>
             <div>Zone: {zoneText}</div>
             <div>Distance: {distanceText}</div>
             <div>Posture: {postureText}</div>
             <div>Mirror view: {mirrorView ? "ON" : "OFF"}</div>
+            <div>Watch mode: {watchMode}</div>
+            <div>Raw watch zone count: {rawWatchZoneCountText}</div>
+            <div>Stable watch zone count: {stableWatchZoneCountText}</div>
+            <div>Required watchkeepers: {requiredWatchCountText}</div>
+            <div>Manning candidate: {manningCandidateText}</div>
+            <div>Manning confirmed: {manningConfirmedText}</div>
+            <div>Active confirmed duration: {activeManningDuration}</div>
             <div>
               Selected zone: {selectedZone ? selectedZone.label : "None"}
             </div>
