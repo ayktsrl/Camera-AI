@@ -456,7 +456,7 @@ export default function App() {
       ctx.font = "bold 14px Arial";
     
       detections.forEach((det, index) => {
-        const x = det.x * width;
+        const x = (mirrorView ? 1 - det.x - det.w : det.x) * width;
         const y = det.y * height;
         const w = det.w * width;
         const h = det.h * height;
