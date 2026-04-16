@@ -186,10 +186,10 @@ function formatDurationMs(ms) {
   return `${s}s`;
 }
 
-function pushRollingValue(ref, value, maxSize = COUNT_HISTORY_SIZE) {
-  ref.current.push(value);
-  if (ref.current.length > maxSize) {
-    ref.current.shift();
+function pushRollingValue(list, value, maxSize = COUNT_HISTORY_SIZE) {
+  list.push(value);
+  if (list.length > maxSize) {
+    list.shift();
   }
 }
 
@@ -256,13 +256,58 @@ function getBBoxFromLandmarks(landmarks, isPointReliable) {
 }
 
 export default function App() {
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const previousTorsoSizeRef = useRef(null);
-  const poseRef = useRef(null);
-  const streamRef = useRef(null);
+  const videoRefs = useRef({
+    camA: null,
+    camB: null,
+  });
+  
+  const canvasRefs = useRef({
+    camA: null,
+    camB: null,
+  });
+  
+  const previousTorsoSizeRef = useRef({
+    camA: null,
+    camB: null,
+  });
+  
+  const poseRefs = useRef({
+    camA: null,
+    camB: null,
+  });
+  
+  const streamRefs = useRef({
+    camA: null,
+    camB: null,
+  });
+  
   const animationRef = useRef(null);
   const frameIndexRef = useRef(0);
+  
+  const trackedPersonsRef = useRef({
+    camA: [],
+    camB: [],
+  });
+  
+  const nextTrackIdRef = useRef({
+    camA: 1,
+    camB: 1,
+  });
+  
+  const rawPeopleHistoryRef = useRef({
+    camA: [],
+    camB: [],
+  });
+  
+  const rawWatchHistoryRef = useRef({
+    camA: [],
+    camB: [],
+  });
+  
+  const perCameraWatchCountRef = useRef({
+    camA: 0,
+    camB: 0,
+  });
 
   const interactionRef = useRef({
     draggingPoint: false,
@@ -270,13 +315,9 @@ export default function App() {
     zoneId: null,
     pointIndex: null,
     lastMouseNorm: null,
+    cameraId: null,
   });
 
-  const trackedPersonsRef = useRef([]);
-  const nextTrackIdRef = useRef(1);
-
-  const rawPeopleHistoryRef = useRef([]);
-  const rawWatchHistoryRef = useRef([]);
   const watchModeRef = useRef("DAY");
 
   const manningStateRef = useRef({
@@ -584,22 +625,24 @@ export default function App() {
       });
     }
 
-    function drawZones(ctx, width, height) {
+    function drawZones(ctx, width, height, cameraId) {
       if (!settingsRef.current.showZones) return;
     
-      const currentSelectedCameraId = selectedCameraIdRef.current;
-      const currentZones = zonesRef.current[currentSelectedCameraId] || [];
-      const currentSelectedZoneId =
-        selectedZoneIdByCameraRef.current[currentSelectedCameraId];
+      const currentZones = zonesRef.current[cameraId] || [];
+      const isSelectedCamera = selectedCameraIdRef.current === cameraId;
+      const currentSelectedZoneId = selectedZoneIdByCameraRef.current[cameraId];
       const currentSelectedPointIndex = selectedPointIndexRef.current;
     
       currentZones.forEach((zone) => {
         if (!zone.points.length) return;
     
         ctx.strokeStyle = zone.color;
-        ctx.lineWidth = zone.id === currentSelectedZoneId ? 3 : 2;
+        ctx.lineWidth =
+          isSelectedCamera && zone.id === currentSelectedZoneId ? 3 : 2;
         ctx.fillStyle =
-          zone.id === currentSelectedZoneId ? zone.color + "22" : zone.color + "11";
+          isSelectedCamera && zone.id === currentSelectedZoneId
+            ? zone.color + "22"
+            : zone.color + "11";
     
         ctx.beginPath();
         ctx.moveTo(zone.points[0].x * width, zone.points[0].y * height);
@@ -626,7 +669,9 @@ export default function App() {
     
           ctx.beginPath();
           ctx.fillStyle =
-            zone.id === currentSelectedZoneId && index === currentSelectedPointIndex
+            isSelectedCamera &&
+            zone.id === currentSelectedZoneId &&
+            index === currentSelectedPointIndex
               ? "#ffffff"
               : zone.color;
           ctx.arc(px, py, 6, 0, Math.PI * 2);
@@ -654,11 +699,10 @@ export default function App() {
       };
     }
 
-    function getZoneFromCenter(center, width, height) {
+    function getZoneFromCenter(center, width, height, cameraId) {
       if (!center) return "Outside defined zones";
     
-      const currentSelectedCameraId = selectedCameraIdRef.current;
-      const currentZones = zonesRef.current[currentSelectedCameraId] || [];
+      const currentZones = zonesRef.current[cameraId] || [];
     
       const pointNorm = {
         x: center.x / width,
@@ -674,11 +718,10 @@ export default function App() {
       return "Outside defined zones";
     }
 
-    function isCenterInsideZone(center, zoneId, width, height) {
+    function isCenterInsideZone(center, zoneId, width, height, cameraId) {
       if (!center) return false;
     
-      const currentSelectedCameraId = selectedCameraIdRef.current;
-      const currentZones = zonesRef.current[currentSelectedCameraId] || [];
+      const currentZones = zonesRef.current[cameraId] || [];
       const zone = currentZones.find((z) => z.id === zoneId);
     
       if (!zone) return false;
@@ -860,32 +903,33 @@ export default function App() {
       setManningConfirmedText(candidateStatus);
     }
 
-    function updateTracks(detections) {
+    function updateTracks(cameraId, detections) {
       const frameIndex = frameIndexRef.current;
-      const tracks = trackedPersonsRef.current.map((track) => ({
+      const tracks = (trackedPersonsRef.current[cameraId] || []).map((track) => ({
         ...track,
       }));
+    
       const unmatchedTrackIndexes = new Set(tracks.map((_, index) => index));
       const unmatchedDetectionIndexes = new Set(
         detections.map((_, index) => index)
       );
-
+    
       const candidatePairs = [];
-
+    
       tracks.forEach((track, trackIndex) => {
         detections.forEach((det, detIndex) => {
           const dx = track.centerNorm.x - det.centerNorm.x;
           const dy = track.centerNorm.y - det.centerNorm.y;
           const dist = Math.hypot(dx, dy);
-
+    
           if (dist <= TRACK_MATCH_DISTANCE) {
             candidatePairs.push({ trackIndex, detIndex, dist });
           }
         });
       });
-
+    
       candidatePairs.sort((a, b) => a.dist - b.dist);
-
+    
       candidatePairs.forEach(({ trackIndex, detIndex }) => {
         if (
           !unmatchedTrackIndexes.has(trackIndex) ||
@@ -893,10 +937,10 @@ export default function App() {
         ) {
           return;
         }
-
+    
         const track = tracks[trackIndex];
         const det = detections[detIndex];
-
+    
         track.landmarks = det.landmarks;
         track.centerNorm = det.centerNorm;
         track.bbox = det.bbox;
@@ -904,16 +948,16 @@ export default function App() {
         track.missingFrames = 0;
         track.seenFrames += 1;
         track.isConfirmed = track.seenFrames >= TRACK_CONFIRM_FRAMES;
-
+    
         unmatchedTrackIndexes.delete(trackIndex);
         unmatchedDetectionIndexes.delete(detIndex);
       });
-
+    
       unmatchedDetectionIndexes.forEach((detIndex) => {
         const det = detections[detIndex];
-
+    
         tracks.push({
-          id: nextTrackIdRef.current++,
+          id: nextTrackIdRef.current[cameraId]++,
           landmarks: det.landmarks,
           centerNorm: det.centerNorm,
           bbox: det.bbox,
@@ -923,44 +967,58 @@ export default function App() {
           isConfirmed: false,
         });
       });
-
+    
       unmatchedTrackIndexes.forEach((trackIndex) => {
         const track = tracks[trackIndex];
         track.missingFrames += 1;
       });
-
+    
       const filtered = tracks.filter(
         (track) => track.missingFrames <= TRACK_MAX_MISSING_FRAMES
       );
-
-      trackedPersonsRef.current = filtered;
+    
+      trackedPersonsRef.current[cameraId] = filtered;
       return filtered;
     }
 
-    async function init() {
+    function buildCameraUrl(config) {
+      if (!config.streamUrl) return "";
+    
       try {
-        setStatus("Loading MediaPipe...");
-
-        const vision = await waitForVision();
-
-        const fileset = await vision.FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-        );
-
-        poseRef.current = await vision.PoseLandmarker.createFromOptions(fileset, {
-          baseOptions: {
-            modelAssetPath:
-              "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
-          },
-          runningMode: "VIDEO",
-          numPoses: 4,
-        });
-
-        if (!isMounted) return;
-
-        setStatus("Model ready");
-
-        streamRef.current = await navigator.mediaDevices.getUserMedia({
+        const url = new URL(config.streamUrl);
+    
+        if (
+          config.requiresAuth &&
+          config.username &&
+          cameraSecretsRef.current[config.id]?.password
+        ) {
+          url.username = config.username;
+          url.password = cameraSecretsRef.current[config.id].password;
+        }
+    
+        return url.toString();
+      } catch {
+        return config.streamUrl;
+      }
+    }
+    
+    async function connectCamera(cameraId, config) {
+      const video = videoRefs.current[cameraId];
+      if (!video) return;
+    
+      if (streamRefs.current[cameraId]) {
+        streamRefs.current[cameraId].getTracks().forEach((track) => track.stop());
+        streamRefs.current[cameraId] = null;
+      }
+    
+      video.pause?.();
+      video.removeAttribute("src");
+      video.srcObject = null;
+    
+      if (!config.enabled) return;
+    
+      if (config.sourceType === "webcam") {
+        const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: "user",
             width: { ideal: 1280 },
@@ -968,50 +1026,86 @@ export default function App() {
           },
           audio: false,
         });
-
-        if (!videoRef.current) return;
-
-        videoRef.current.srcObject = streamRef.current;
-        await videoRef.current.play();
-
-        setStatus("Camera ready");
+    
+        streamRefs.current[cameraId] = stream;
+        video.srcObject = stream;
+        await video.play();
+        return;
+      }
+    
+      const resolvedUrl = buildCameraUrl(config);
+      if (!resolvedUrl) return;
+    
+      video.crossOrigin = "anonymous";
+      video.src = resolvedUrl;
+      await video.play();
+    }
+    
+    async function init() {
+      try {
+        setStatus("Loading MediaPipe...");
+    
+        const vision = await waitForVision();
+    
+        const fileset = await vision.FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+        );
+    
+        for (const cam of cameraConfigs) {
+          poseRefs.current[cam.id] = await vision.PoseLandmarker.createFromOptions(
+            fileset,
+            {
+              baseOptions: {
+                modelAssetPath:
+                  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
+              },
+              runningMode: "VIDEO",
+              numPoses: 4,
+            }
+          );
+        }
+    
+        if (!isMounted) return;
+    
+        for (const cam of cameraConfigs) {
+          try {
+            await connectCamera(cam.id, cam);
+          } catch (err) {
+            console.error(`Camera ${cam.id} connect error`, err);
+          }
+        }
+    
+        setStatus("Cameras ready");
         loop();
       } catch (error) {
         console.error(error);
         setStatus(`Error: ${error.message}`);
       }
     }
-
-    async function loop() {
-            if (!isMounted) return;
-
-      frameIndexRef.current += 1;
-
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-
-      if (!video || !canvas || !poseRef.current || video.readyState < 2) {
-        animationRef.current = requestAnimationFrame(loop);
-        return;
-      }
-
+    
+    function processCamera(cameraId) {
+      const video = videoRefs.current[cameraId];
+      const canvas = canvasRefs.current[cameraId];
+      const pose = poseRefs.current[cameraId];
+    
+      if (!video || !canvas || !pose || video.readyState < 2) return;
+    
       const ctx = canvas.getContext("2d");
       canvas.width = STAGE_WIDTH;
       canvas.height = STAGE_HEIGHT;
-
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const result = poseRef.current.detectForVideo(video, performance.now());
+    
+      const result = pose.detectForVideo(video, performance.now());
       const allLandmarks = result.landmarks ?? [];
-
+    
       const detections = allLandmarks
         .map((landmarks) => {
           const reliableCount = countReliablePoints(landmarks);
           if (reliableCount < 8) return null;
-
+    
           const bbox = getBBoxFromLandmarks(landmarks, isPointReliable);
           if (!bbox) return null;
-
+    
           return {
             landmarks,
             centerNorm: {
@@ -1023,114 +1117,19 @@ export default function App() {
           };
         })
         .filter(Boolean);
-
-      const tracks = updateTracks(detections);
+    
+      const tracks = updateTracks(cameraId, detections);
       const confirmedTracks = tracks.filter((track) => track.isConfirmed);
-
+    
       const rawPeopleCount = detections.length;
       const trackedPeopleCount = confirmedTracks.length;
-
-      pushRollingValue(rawPeopleHistoryRef, trackedPeopleCount);
+    
+      pushRollingValue(rawPeopleHistoryRef.current[cameraId], trackedPeopleCount);
       const stablePeopleCount = getModeValue(
-        rawPeopleHistoryRef.current,
+        rawPeopleHistoryRef.current[cameraId],
         trackedPeopleCount
       );
-
-      setPersonCountText(`${trackedPeopleCount} tracked / raw ${rawPeopleCount}`);
-      setRawPeopleCountText(String(rawPeopleCount));
-      setStablePeopleCountText(String(stablePeopleCount));
-
-      if (!confirmedTracks.length) {
-        setPersonText("No confirmed person");
-        setQualityText("No stable detection");
-        setVisiblePointsText("0");
-        setZoneText("Outside defined zones");
-        setDistanceText("Distance unknown");
-        setPostureText("Unknown posture");
-        previousTorsoSizeRef.current = null;
-
-        pushRollingValue(rawWatchHistoryRef, 0);
-        const stableWatchCount = getModeValue(rawWatchHistoryRef.current, 0);
-        updateManningState(0, stableWatchCount);
-
-        drawZones(ctx, canvas.width, canvas.height);
-
-        animationRef.current = requestAnimationFrame(loop);
-        return;
-      }
-
-      let primaryTrack = null;
-
-      const watchTracks = confirmedTracks.filter((track) =>
-        isCenterInsideZone(
-          {
-            x: track.centerNorm.x * canvas.width,
-            y: track.centerNorm.y * canvas.height,
-          },
-          WATCH_ZONE_ID,
-          canvas.width,
-          canvas.height
-        )
-      );
-
-      if (watchTracks.length) {
-        primaryTrack = watchTracks.sort(
-          (a, b) => (b.bbox?.area || 0) - (a.bbox?.area || 0)
-        )[0];
-      } else {
-        primaryTrack = confirmedTracks.sort(
-          (a, b) => (b.bbox?.area || 0) - (a.bbox?.area || 0)
-        )[0];
-      }
-
-      const landmarks = primaryTrack.landmarks;
-      const reliablePointCount = countReliablePoints(landmarks);
-      const torso = getTorsoSize(landmarks, canvas.width, canvas.height);
-      const posture = getPostureStatus(landmarks);
-
-      setPostureText(posture);
-
-      if (torso) {
-        const previous = previousTorsoSizeRef.current;
-
-        if (previous) {
-          const ratio = torso.area / previous.area;
-
-          if (ratio > 1.12) {
-            setDistanceText("Moving closer");
-          } else if (ratio < 0.88) {
-            setDistanceText("Moving away");
-          } else {
-            setDistanceText("Stable distance");
-          }
-        }
-
-        previousTorsoSizeRef.current = torso;
-      } else {
-        setDistanceText("Distance unknown");
-      }
-
-      drawPose(ctx, confirmedTracks, canvas.width, canvas.height);
-      drawBoundingBox(ctx, confirmedTracks, canvas.width, canvas.height);
-      drawZones(ctx, canvas.width, canvas.height);
-
-      const personCenter = {
-        x: primaryTrack.centerNorm.x * canvas.width,
-        y: primaryTrack.centerNorm.y * canvas.height,
-      };
-
-      const currentZone = getZoneFromCenter(
-        personCenter,
-        canvas.width,
-        canvas.height
-      );
-      setZoneText(currentZone);
-
-      const centers = confirmedTracks.map((track) => ({
-        x: track.centerNorm.x * canvas.width,
-        y: track.centerNorm.y * canvas.height,
-      }));
-
+    
       const rawWatchCount = confirmedTracks.filter((track) =>
         isCenterInsideZone(
           {
@@ -1139,40 +1138,138 @@ export default function App() {
           },
           WATCH_ZONE_ID,
           canvas.width,
-          canvas.height
+          canvas.height,
+          cameraId
         )
       ).length;
-
-      pushRollingValue(rawWatchHistoryRef, rawWatchCount);
-      const stableWatchCount = getModeValue(rawWatchHistoryRef.current, rawWatchCount);
-      setFusionWatchCount(stableWatchCount);
-
-      updateManningState(rawWatchCount, stableWatchCount);
-
-      if (settingsRef.current.showCenterPoint) {
-        centers.forEach((center, index) => {
-          const hue = (index * 110) % 360;
-
-          ctx.fillStyle = `hsl(${hue}, 100%, 85%)`;
-          ctx.beginPath();
-          ctx.arc(center.x, center.y, 6, 0, Math.PI * 2);
-          ctx.fill();
-        });
-      }
-
-      if (reliablePointCount >= 16) {
-        setPersonText(`Primary person: P${primaryTrack.id}`);
-        setQualityText("Strong detection");
-      } else if (reliablePointCount >= 8) {
-        setPersonText(`Primary person: P${primaryTrack.id}`);
-        setQualityText("Weak detection");
+    
+      pushRollingValue(rawWatchHistoryRef.current[cameraId], rawWatchCount);
+      const stableWatchCount = getModeValue(
+        rawWatchHistoryRef.current[cameraId],
+        rawWatchCount
+      );
+    
+      perCameraWatchCountRef.current[cameraId] = stableWatchCount;
+    
+      if (confirmedTracks.length) {
+        drawPose(ctx, confirmedTracks, canvas.width, canvas.height);
+        drawBoundingBox(ctx, confirmedTracks, canvas.width, canvas.height);
+    
+        const primaryTrack = confirmedTracks.sort(
+          (a, b) => (b.bbox?.area || 0) - (a.bbox?.area || 0)
+        )[0];
+    
+        const landmarks = primaryTrack.landmarks;
+        const reliablePointCount = countReliablePoints(landmarks);
+        const torso = getTorsoSize(landmarks, canvas.width, canvas.height);
+        const posture = getPostureStatus(landmarks);
+    
+        const personCenter = {
+          x: primaryTrack.centerNorm.x * canvas.width,
+          y: primaryTrack.centerNorm.y * canvas.height,
+        };
+    
+        const currentZone = getZoneFromCenter(
+          personCenter,
+          canvas.width,
+          canvas.height,
+          cameraId
+        );
+    
+        if (settingsRef.current.showCenterPoint) {
+          confirmedTracks.forEach((track, index) => {
+            const hue = (index * 110) % 360;
+            ctx.fillStyle = `hsl(${hue}, 100%, 85%)`;
+            ctx.beginPath();
+            ctx.arc(
+              track.centerNorm.x * canvas.width,
+              track.centerNorm.y * canvas.height,
+              6,
+              0,
+              Math.PI * 2
+            );
+            ctx.fill();
+          });
+        }
+    
+        if (cameraId === selectedCameraIdRef.current) {
+          setPersonCountText(`${trackedPeopleCount} tracked / raw ${rawPeopleCount}`);
+          setRawPeopleCountText(String(rawPeopleCount));
+          setStablePeopleCountText(String(stablePeopleCount));
+          setZoneText(currentZone);
+          setPostureText(posture);
+          setVisiblePointsText(String(reliablePointCount));
+          setPersonText(`Primary person: P${primaryTrack.id}`);
+    
+          if (reliablePointCount >= 16) {
+            setQualityText("Strong detection");
+          } else if (reliablePointCount >= 8) {
+            setQualityText("Weak detection");
+          } else {
+            setQualityText("Too noisy");
+          }
+    
+          if (torso) {
+            const previous = previousTorsoSizeRef.current[cameraId];
+    
+            if (previous) {
+              const ratio = torso.area / previous.area;
+    
+              if (ratio > 1.12) {
+                setDistanceText("Moving closer");
+              } else if (ratio < 0.88) {
+                setDistanceText("Moving away");
+              } else {
+                setDistanceText("Stable distance");
+              }
+            } else {
+              setDistanceText("Stable distance");
+            }
+    
+            previousTorsoSizeRef.current[cameraId] = torso;
+          } else {
+            setDistanceText("Distance unknown");
+          }
+    
+          updateManningState(rawWatchCount, stableWatchCount);
+        }
       } else {
-        setPersonText(`Primary person: P${primaryTrack.id}`);
-        setQualityText("Too noisy");
+        if (cameraId === selectedCameraIdRef.current) {
+          setPersonText("No confirmed person");
+          setQualityText("No stable detection");
+          setVisiblePointsText("0");
+          setPersonCountText(`${trackedPeopleCount} tracked / raw ${rawPeopleCount}`);
+          setRawPeopleCountText(String(rawPeopleCount));
+          setStablePeopleCountText(String(stablePeopleCount));
+          setZoneText("Outside defined zones");
+          setDistanceText("Distance unknown");
+          setPostureText("Unknown posture");
+          previousTorsoSizeRef.current[cameraId] = null;
+          updateManningState(rawWatchCount, stableWatchCount);
+        }
       }
-
-      setVisiblePointsText(String(reliablePointCount));
-
+    
+      drawZones(ctx, canvas.width, canvas.height, cameraId);
+    }
+    
+    function loop() {
+      if (!isMounted) return;
+    
+      frameIndexRef.current += 1;
+    
+      for (const cam of cameraConfigs) {
+        if (!cam.enabled) continue;
+        processCamera(cam.id);
+      }
+    
+      const fusion = Math.max(
+        perCameraWatchCountRef.current.camA || 0,
+        perCameraWatchCountRef.current.camB || 0
+      );
+    
+      setFusionWatchCount(fusion);
+      setStatus(`Cameras ready (${selectedCameraIdRef.current} selected)`);
+    
       animationRef.current = requestAnimationFrame(loop);
     }
 
@@ -1185,9 +1282,11 @@ export default function App() {
         cancelAnimationFrame(animationRef.current);
       }
 
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
+      Object.values(streamRefs.current).forEach((stream) => {
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+        }
+      });
     };
   }, []);
 
@@ -1227,22 +1326,22 @@ export default function App() {
     return cameraConfigs.find((cam) => cam.id === cameraId);
   }
 
-  function getCanvasInfo() {
-    const canvas = canvasRef.current;
+  function getCanvasInfo(cameraId) {
+    const canvas = canvasRefs.current[cameraId];
     if (!canvas) return null;
-
+  
     const rect = canvas.getBoundingClientRect();
     return { canvas, rect };
   }
 
-  function getNormalizedMouse(event) {
-    const info = getCanvasInfo();
+  function getNormalizedMouse(cameraId, event) {
+    const info = getCanvasInfo(cameraId);
     if (!info) return null;
-
+  
     const { rect } = info;
     const rawX = clamp((event.clientX - rect.left) / rect.width, 0, 1);
     const rawY = clamp((event.clientY - rect.top) / rect.height, 0, 1);
-
+  
     return {
       x: mirrorView ? 1 - rawX : rawX,
       y: rawY,
@@ -1253,16 +1352,17 @@ export default function App() {
     };
   }
 
-  function findNearestPoint(mouse) {
+  function findNearestPoint(cameraId, mouse) {
+    const activeZones = zonesByCamera[cameraId] || [];
     let hit = null;
     let minDistance = Infinity;
-
-    zones.forEach((zone) => {
+  
+    activeZones.forEach((zone) => {
       zone.points.forEach((point, index) => {
         const px = point.x * mouse.widthPx;
         const py = point.y * mouse.heightPx;
         const dist = Math.hypot(mouse.x * mouse.widthPx - px, mouse.yPx - py);
-
+  
         if (dist < HANDLE_RADIUS && dist < minDistance) {
           minDistance = dist;
           hit = {
@@ -1272,137 +1372,170 @@ export default function App() {
         }
       });
     });
-
+  
     return hit;
   }
 
-  function findZoneUnderMouse(mouse) {
-    for (let i = zones.length - 1; i >= 0; i--) {
-      const zone = zones[i];
+  function findZoneUnderMouse(cameraId, mouse) {
+    const activeZones = zonesByCamera[cameraId] || [];
+  
+    for (let i = activeZones.length - 1; i >= 0; i--) {
+      const zone = activeZones[i];
       if (pointInPolygon({ x: mouse.x, y: mouse.y }, zone.points)) {
         return zone.id;
       }
     }
+  
     return null;
   }
 
-  function addPointToNearestEdge(mouse) {
-    const zone = zones.find((z) => z.id === selectedZoneId);
+  function addPointToNearestEdge(cameraId, mouse) {
+    const activeZones = zonesByCamera[cameraId] || [];
+    const activeSelectedZoneId =
+      selectedZoneIdByCamera[cameraId] || DEFAULT_ZONES[0].id;
+  
+    const zone = activeZones.find((z) => z.id === activeSelectedZoneId);
     if (!zone || zone.points.length < 2) return;
-
+  
     let bestEdgeIndex = -1;
     let minDist = Infinity;
-
+  
     for (let i = 0; i < zone.points.length; i++) {
       const a = zone.points[i];
       const b = zone.points[(i + 1) % zone.points.length];
-
       const dist = distanceToSegment(mouse.x, mouse.y, a.x, a.y, b.x, b.y);
-
+  
       if (dist < minDist) {
         minDist = dist;
         bestEdgeIndex = i;
       }
     }
-
+  
     if (bestEdgeIndex === -1) return;
-
-    const nextZones = cloneZones(zones);
-    const targetZone = nextZones.find((z) => z.id === selectedZoneId);
+  
+    const nextZones = cloneZones(activeZones);
+    const targetZone = nextZones.find((z) => z.id === activeSelectedZoneId);
     if (!targetZone) return;
-
+  
     targetZone.points.splice(bestEdgeIndex + 1, 0, { x: mouse.x, y: mouse.y });
-
-    updateZonesForSelectedCamera(nextZones);
-        setSelectedPointIndex(bestEdgeIndex + 1);
+  
+    setZonesByCamera((prev) => ({
+      ...prev,
+      [cameraId]: nextZones,
+    }));
+  
+    setSelectedCameraId(cameraId);
+    setSelectedPointIndex(bestEdgeIndex + 1);
   }
 
-  function handleCanvasMouseDown(event) {
-    const mouse = getNormalizedMouse(event);
+  function handleCanvasMouseDown(cameraId, event) {
+    setSelectedCameraId(cameraId);
+  
+    const mouse = getNormalizedMouse(cameraId, event);
     if (!mouse) return;
-
-    const nearestPoint = findNearestPoint(mouse);
-
+  
+    const activeSelectedZoneId =
+      selectedZoneIdByCamera[cameraId] || DEFAULT_ZONES[0].id;
+  
+    const nearestPoint = findNearestPoint(cameraId, mouse);
+  
     if (nearestPoint) {
-      setSelectedZoneIdForSelectedCamera(nearestPoint.zoneId);
+      setSelectedZoneIdByCamera((prev) => ({
+        ...prev,
+        [cameraId]: nearestPoint.zoneId,
+      }));
       setSelectedPointIndex(nearestPoint.pointIndex);
-
+  
       interactionRef.current = {
         draggingPoint: true,
         draggingZone: false,
         zoneId: nearestPoint.zoneId,
         pointIndex: nearestPoint.pointIndex,
         lastMouseNorm: { x: mouse.x, y: mouse.y },
+        cameraId,
       };
       return;
     }
-
-    const zoneId = findZoneUnderMouse(mouse);
-
+  
+    const zoneId = findZoneUnderMouse(cameraId, mouse);
+  
     if (zoneId) {
-      setSelectedZoneIdForSelectedCamera(zoneId);
+      setSelectedZoneIdByCamera((prev) => ({
+        ...prev,
+        [cameraId]: zoneId,
+      }));
       setSelectedPointIndex(null);
-
-      if (addPointMode && zoneId === selectedZoneId) {
-        addPointToNearestEdge(mouse);
+  
+      if (addPointMode && zoneId === activeSelectedZoneId) {
+        addPointToNearestEdge(cameraId, mouse);
         return;
       }
-
+  
       interactionRef.current = {
         draggingPoint: false,
         draggingZone: true,
         zoneId,
         pointIndex: null,
         lastMouseNorm: { x: mouse.x, y: mouse.y },
+        cameraId,
       };
       return;
     }
-
+  
     if (addPointMode) {
-      addPointToNearestEdge(mouse);
+      addPointToNearestEdge(cameraId, mouse);
       return;
     }
-
+  
     setSelectedPointIndex(null);
   }
 
-  function handleCanvasMouseMove(event) {
-    const mouse = getNormalizedMouse(event);
+  function handleCanvasMouseMove(cameraId, event) {
+    const mouse = getNormalizedMouse(cameraId, event);
     if (!mouse) return;
-
+  
     const interaction = interactionRef.current;
-    if (!interaction.zoneId) return;
-
+    if (!interaction.zoneId || interaction.cameraId !== cameraId) return;
+  
+    const activeZones = zonesByCamera[cameraId] || [];
+  
     if (interaction.draggingPoint) {
-      const nextZones = cloneZones(zones);
+      const nextZones = cloneZones(activeZones);
       const zone = nextZones.find((z) => z.id === interaction.zoneId);
       if (!zone) return;
-
+  
       zone.points[interaction.pointIndex] = {
         x: mouse.x,
         y: mouse.y,
       };
-
-      updateZonesForSelectedCamera(nextZones);
-            return;
+  
+      setZonesByCamera((prev) => ({
+        ...prev,
+        [cameraId]: nextZones,
+      }));
+      return;
     }
-
+  
     if (interaction.draggingZone && interaction.lastMouseNorm) {
       const dx = mouse.x - interaction.lastMouseNorm.x;
       const dy = mouse.y - interaction.lastMouseNorm.y;
-
-      const nextZones = cloneZones(zones);
+  
+      const nextZones = cloneZones(activeZones);
       const zone = nextZones.find((z) => z.id === interaction.zoneId);
       if (!zone) return;
-
+  
       zone.points = zone.points.map((point) => ({
         x: clamp(point.x + dx, 0, 1),
         y: clamp(point.y + dy, 0, 1),
       }));
-
+  
       interactionRef.current.lastMouseNorm = { x: mouse.x, y: mouse.y };
-      updateZonesForSelectedCamera(nextZones);
-        }
+  
+      setZonesByCamera((prev) => ({
+        ...prev,
+        [cameraId]: nextZones,
+      }));
+    }
   }
 
   function handleCanvasMouseUp() {
@@ -1412,6 +1545,7 @@ export default function App() {
       zoneId: null,
       pointIndex: null,
       lastMouseNorm: null,
+      cameraId: null,
     };
   }
 
@@ -2102,51 +2236,90 @@ const activeManningDuration =
 
           <div
   style={{
-    position: "relative",
-    width: "100%",
-    maxWidth: STAGE_WIDTH,
-    aspectRatio: `${STAGE_WIDTH} / ${STAGE_HEIGHT}`,
-    borderRadius: 14,
-    overflow: "hidden",
-    background: "#06122b",
-    border: "1px solid #173462",
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 16,
   }}
 >
-<video
-  ref={videoRef}
-  playsInline
-  muted
-  style={{
-    position: "absolute",
-    inset: 0,
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block",
-    transform: mirrorView ? "scaleX(-1)" : "none",
-    opacity: showVideo ? 1 : 0,
-    zIndex: 1,
-  }}
-/>
+  {cameraConfigs.map((cam) => (
+    <div
+      key={cam.id}
+      style={{
+        borderRadius: 14,
+        overflow: "hidden",
+        background: "#06122b",
+        border:
+          selectedCameraId === cam.id
+            ? "2px solid #3b82f6"
+            : "1px solid #173462",
+      }}
+    >
+      <div
+        style={{
+          padding: "10px 12px",
+          background: "#081a3a",
+          borderBottom: "1px solid #173462",
+          fontWeight: 700,
+          cursor: "pointer",
+        }}
+        onClick={() => {
+          setSelectedCameraId(cam.id);
+          setSelectedPointIndex(null);
+        }}
+      >
+        {cam.label}
+      </div>
 
-<canvas
-  ref={canvasRef}
-  onMouseDown={handleCanvasMouseDown}
-  onMouseMove={handleCanvasMouseMove}
-  onMouseUp={handleCanvasMouseUp}
-  onMouseLeave={handleCanvasMouseUp}
-  style={{
-    position: "absolute",
-    inset: 0,
-    width: "100%",
-    height: "100%",
-    pointerEvents: "auto",
-    transform: mirrorView ? "scaleX(-1)" : "none",
-    cursor: "crosshair",
-    zIndex: 3,
-  }}
-/>
-          </div>
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          aspectRatio: `${STAGE_WIDTH} / ${STAGE_HEIGHT}`,
+          background: "#06122b",
+        }}
+      >
+        <video
+          ref={(el) => {
+            videoRefs.current[cam.id] = el;
+          }}
+          playsInline
+          muted
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
+            transform: mirrorView ? "scaleX(-1)" : "none",
+            opacity: showVideo ? 1 : 0,
+            zIndex: 1,
+          }}
+        />
+
+        <canvas
+          ref={(el) => {
+            canvasRefs.current[cam.id] = el;
+          }}
+          onMouseDown={(e) => handleCanvasMouseDown(cam.id, e)}
+          onMouseMove={(e) => handleCanvasMouseMove(cam.id, e)}
+          onMouseUp={handleCanvasMouseUp}
+          onMouseLeave={handleCanvasMouseUp}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            pointerEvents: "auto",
+            transform: mirrorView ? "scaleX(-1)" : "none",
+            cursor: "crosshair",
+            zIndex: 3,
+          }}
+        />
+      </div>
+    </div>
+  ))}
+</div>
         </div>
       </div>
     </div>
