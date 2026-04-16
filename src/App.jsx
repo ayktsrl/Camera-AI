@@ -58,6 +58,53 @@ const DEFAULT_ZONES = [
   },
 ];
 
+const STORAGE_KEYS = {
+  cameraConfigs: "bridge_ai_camera_configs_v1",
+  zonesByCamera: "bridge_ai_zones_by_camera_v1",
+  selectedCameraId: "bridge_ai_selected_camera_id_v1",
+  selectedZoneIdByCamera: "bridge_ai_selected_zone_id_by_camera_v1",
+  watchMode: "bridge_ai_watch_mode_v1",
+  minVisibility: "bridge_ai_min_visibility_v1",
+  minPresence: "bridge_ai_min_presence_v1",
+};
+
+const DEFAULT_CAMERA_CONFIGS = [
+  {
+    id: "camA",
+    label: "Camera A",
+    enabled: true,
+    sourceType: "webcam",
+    transport: "direct",
+    streamUrl: "",
+    username: "",
+    requiresAuth: false,
+  },
+  {
+    id: "camB",
+    label: "Camera B",
+    enabled: true,
+    sourceType: "webcam",
+    transport: "direct",
+    streamUrl: "",
+    username: "",
+    requiresAuth: false,
+  },
+];
+
+function buildDefaultZonesByCamera() {
+  return {
+    camA: cloneZones(DEFAULT_ZONES),
+    camB: cloneZones(DEFAULT_ZONES),
+  };
+}
+
+function buildDefaultSelectedZoneIdByCamera() {
+  return {
+    camA: DEFAULT_ZONES[0].id,
+    camB: DEFAULT_ZONES[0].id,
+  };
+}
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -251,7 +298,7 @@ export default function App() {
   const [distanceText, setDistanceText] = useState("Stable distance");
   const [postureText, setPostureText] = useState("Upright posture");
 
-  const [watchMode, setWatchMode] = useState("DAY");
+  const [fusionWatchCount, setFusionWatchCount] = useState(0);
   const [rawWatchZoneCountText, setRawWatchZoneCountText] = useState("0");
   const [stableWatchZoneCountText, setStableWatchZoneCountText] = useState("0");
   const [rawPeopleCountText, setRawPeopleCountText] = useState("0");
@@ -269,15 +316,59 @@ export default function App() {
   const [depthMode, setDepthMode] = useState(true);
   const [mirrorView, setMirrorView] = useState(true);
 
-  const [minVisibility, setMinVisibility] = useState(DEFAULT_MIN_VISIBILITY);
-  const [minPresence, setMinPresence] = useState(DEFAULT_MIN_PRESENCE);
-
-  const [zones, setZones] = useState(cloneZones(DEFAULT_ZONES));
-  const [selectedZoneId, setSelectedZoneId] = useState(DEFAULT_ZONES[0].id);
+  const [minVisibility, setMinVisibility] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.minVisibility);
+    return saved ? Number(saved) : DEFAULT_MIN_VISIBILITY;
+  });
+  
+  const [minPresence, setMinPresence] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.minPresence);
+    return saved ? Number(saved) : DEFAULT_MIN_PRESENCE;
+  });
+  
+  const [watchMode, setWatchMode] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.watchMode) || "DAY";
+  });
+  
+  const [cameraConfigs, setCameraConfigs] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.cameraConfigs);
+      return saved ? JSON.parse(saved) : DEFAULT_CAMERA_CONFIGS;
+    } catch {
+      return DEFAULT_CAMERA_CONFIGS;
+    }
+  });
+  
+  const cameraSecretsRef = useRef({
+    camA: { password: "" },
+    camB: { password: "" },
+  });
+  
+  const [selectedCameraId, setSelectedCameraId] = useState(() => {
+    return localStorage.getItem(STORAGE_KEYS.selectedCameraId) || "camA";
+  });
+  
+  const [zonesByCamera, setZonesByCamera] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.zonesByCamera);
+      return saved ? JSON.parse(saved) : buildDefaultZonesByCamera();
+    } catch {
+      return buildDefaultZonesByCamera();
+    }
+  });
+  
+  const [selectedZoneIdByCamera, setSelectedZoneIdByCamera] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.selectedZoneIdByCamera);
+      return saved ? JSON.parse(saved) : buildDefaultSelectedZoneIdByCamera();
+    } catch {
+      return buildDefaultSelectedZoneIdByCamera();
+    }
+  });
+  
   const [selectedPointIndex, setSelectedPointIndex] = useState(null);
   const [addPointMode, setAddPointMode] = useState(false);
 
-  const zonesRef = useRef(zones);
   const settingsRef = useRef({
     showSkeleton,
     showBoundingBox,
@@ -287,12 +378,12 @@ export default function App() {
     minVisibility,
     minPresence,
   });
-  const selectedZoneIdRef = useRef(selectedZoneId);
+
   const selectedPointIndexRef = useRef(selectedPointIndex);
 
-  useEffect(() => {
-    zonesRef.current = zones;
-  }, [zones]);
+  const zonesRef = useRef(zonesByCamera);
+  const selectedCameraIdRef = useRef(selectedCameraId);
+  const selectedZoneIdByCameraRef = useRef(selectedZoneIdByCamera);
 
   useEffect(() => {
     settingsRef.current = {
@@ -314,11 +405,58 @@ export default function App() {
     minPresence,
   ]);
 
-
-
   useEffect(() => {
-    selectedZoneIdRef.current = selectedZoneId;
-  }, [selectedZoneId]);
+    zonesRef.current = zonesByCamera;
+  }, [zonesByCamera]);
+  
+  useEffect(() => {
+    selectedCameraIdRef.current = selectedCameraId;
+  }, [selectedCameraId]);
+  
+  useEffect(() => {
+    selectedZoneIdByCameraRef.current = selectedZoneIdByCamera;
+  }, [selectedZoneIdByCamera]);
+  
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.minVisibility, String(minVisibility));
+  }, [minVisibility]);
+  
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.minPresence, String(minPresence));
+  }, [minPresence]);
+  
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.watchMode, watchMode);
+  }, [watchMode]);
+  
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.selectedCameraId, selectedCameraId);
+  }, [selectedCameraId]);
+  
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_KEYS.zonesByCamera,
+      JSON.stringify(zonesByCamera)
+    );
+  }, [zonesByCamera]);
+  
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_KEYS.selectedZoneIdByCamera,
+      JSON.stringify(selectedZoneIdByCamera)
+    );
+  }, [selectedZoneIdByCamera]);
+  
+  useEffect(() => {
+    const safeConfigs = cameraConfigs.map((cfg) => ({
+      ...cfg,
+      // password deliberately excluded
+    }));
+    localStorage.setItem(
+      STORAGE_KEYS.cameraConfigs,
+      JSON.stringify(safeConfigs)
+    );
+  }, [cameraConfigs]);
 
   useEffect(() => {
     selectedPointIndexRef.current = selectedPointIndex;
@@ -448,29 +586,32 @@ export default function App() {
 
     function drawZones(ctx, width, height) {
       if (!settingsRef.current.showZones) return;
-
-      zonesRef.current.forEach((zone) => {
+    
+      const currentSelectedCameraId = selectedCameraIdRef.current;
+      const currentZones = zonesRef.current[currentSelectedCameraId] || [];
+      const currentSelectedZoneId =
+        selectedZoneIdByCameraRef.current[currentSelectedCameraId];
+      const currentSelectedPointIndex = selectedPointIndexRef.current;
+    
+      currentZones.forEach((zone) => {
         if (!zone.points.length) return;
-
-        const currentSelectedZoneId = selectedZoneIdRef.current;
-        const currentSelectedPointIndex = selectedPointIndexRef.current;
-
+    
         ctx.strokeStyle = zone.color;
         ctx.lineWidth = zone.id === currentSelectedZoneId ? 3 : 2;
         ctx.fillStyle =
           zone.id === currentSelectedZoneId ? zone.color + "22" : zone.color + "11";
-
+    
         ctx.beginPath();
         ctx.moveTo(zone.points[0].x * width, zone.points[0].y * height);
-
+    
         for (let i = 1; i < zone.points.length; i++) {
           ctx.lineTo(zone.points[i].x * width, zone.points[i].y * height);
         }
-
+    
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-
+    
         ctx.fillStyle = zone.color;
         ctx.font = "16px Arial";
         ctx.fillText(
@@ -478,11 +619,11 @@ export default function App() {
           zone.points[0].x * width + 8,
           zone.points[0].y * height - 8
         );
-
+    
         zone.points.forEach((point, index) => {
           const px = point.x * width;
           const py = point.y * height;
-
+    
           ctx.beginPath();
           ctx.fillStyle =
             zone.id === currentSelectedZoneId && index === currentSelectedPointIndex
@@ -490,7 +631,7 @@ export default function App() {
               : zone.color;
           ctx.arc(px, py, 6, 0, Math.PI * 2);
           ctx.fill();
-
+    
           ctx.beginPath();
           ctx.strokeStyle = "#001b44";
           ctx.lineWidth = 2;
@@ -515,27 +656,33 @@ export default function App() {
 
     function getZoneFromCenter(center, width, height) {
       if (!center) return "Outside defined zones";
-
+    
+      const currentSelectedCameraId = selectedCameraIdRef.current;
+      const currentZones = zonesRef.current[currentSelectedCameraId] || [];
+    
       const pointNorm = {
         x: center.x / width,
         y: center.y / height,
       };
-
-      for (const zone of zonesRef.current) {
+    
+      for (const zone of currentZones) {
         if (pointInPolygon(pointNorm, zone.points)) {
           return zone.label;
         }
       }
-
+    
       return "Outside defined zones";
     }
 
     function isCenterInsideZone(center, zoneId, width, height) {
       if (!center) return false;
-
-      const zone = zonesRef.current.find((z) => z.id === zoneId);
+    
+      const currentSelectedCameraId = selectedCameraIdRef.current;
+      const currentZones = zonesRef.current[currentSelectedCameraId] || [];
+      const zone = currentZones.find((z) => z.id === zoneId);
+    
       if (!zone) return false;
-
+    
       return pointInPolygon(
         { x: center.x / width, y: center.y / height },
         zone.points
@@ -998,6 +1145,7 @@ export default function App() {
 
       pushRollingValue(rawWatchHistoryRef, rawWatchCount);
       const stableWatchCount = getModeValue(rawWatchHistoryRef.current, rawWatchCount);
+      setFusionWatchCount(stableWatchCount);
 
       updateManningState(rawWatchCount, stableWatchCount);
 
@@ -1042,6 +1190,42 @@ export default function App() {
       }
     };
   }, []);
+
+  const selectedZoneId = selectedZoneIdByCamera[selectedCameraId] || DEFAULT_ZONES[0].id;
+  const zones = zonesByCamera[selectedCameraId] || cloneZones(DEFAULT_ZONES);
+  
+  function updateCameraConfig(cameraId, field, value) {
+    setCameraConfigs((prev) =>
+      prev.map((cam) =>
+        cam.id === cameraId ? { ...cam, [field]: value } : cam
+      )
+    );
+  }
+  
+  function updateCameraPassword(cameraId, value) {
+    cameraSecretsRef.current[cameraId] = {
+      ...(cameraSecretsRef.current[cameraId] || {}),
+      password: value,
+    };
+  }
+  
+  function updateZonesForSelectedCamera(nextZones) {
+    setZonesByCamera((prev) => ({
+      ...prev,
+      [selectedCameraId]: nextZones,
+    }));
+  }
+  
+  function setSelectedZoneIdForSelectedCamera(zoneId) {
+    setSelectedZoneIdByCamera((prev) => ({
+      ...prev,
+      [selectedCameraId]: zoneId,
+    }));
+  }
+  
+  function getCameraConfig(cameraId) {
+    return cameraConfigs.find((cam) => cam.id === cameraId);
+  }
 
   function getCanvasInfo() {
     const canvas = canvasRef.current;
@@ -1129,8 +1313,8 @@ export default function App() {
 
     targetZone.points.splice(bestEdgeIndex + 1, 0, { x: mouse.x, y: mouse.y });
 
-    setZones(nextZones);
-    setSelectedPointIndex(bestEdgeIndex + 1);
+    updateZonesForSelectedCamera(nextZones);
+        setSelectedPointIndex(bestEdgeIndex + 1);
   }
 
   function handleCanvasMouseDown(event) {
@@ -1140,7 +1324,7 @@ export default function App() {
     const nearestPoint = findNearestPoint(mouse);
 
     if (nearestPoint) {
-      setSelectedZoneId(nearestPoint.zoneId);
+      setSelectedZoneIdForSelectedCamera(nearestPoint.zoneId);
       setSelectedPointIndex(nearestPoint.pointIndex);
 
       interactionRef.current = {
@@ -1156,7 +1340,7 @@ export default function App() {
     const zoneId = findZoneUnderMouse(mouse);
 
     if (zoneId) {
-      setSelectedZoneId(zoneId);
+      setSelectedZoneIdForSelectedCamera(zoneId);
       setSelectedPointIndex(null);
 
       if (addPointMode && zoneId === selectedZoneId) {
@@ -1199,8 +1383,8 @@ export default function App() {
         y: mouse.y,
       };
 
-      setZones(nextZones);
-      return;
+      updateZonesForSelectedCamera(nextZones);
+            return;
     }
 
     if (interaction.draggingZone && interaction.lastMouseNorm) {
@@ -1217,8 +1401,8 @@ export default function App() {
       }));
 
       interactionRef.current.lastMouseNorm = { x: mouse.x, y: mouse.y };
-      setZones(nextZones);
-    }
+      updateZonesForSelectedCamera(nextZones);
+        }
   }
 
   function handleCanvasMouseUp() {
@@ -1239,8 +1423,8 @@ export default function App() {
     if (!zone || zone.points.length <= 3) return;
 
     zone.points.splice(selectedPointIndex, 1);
-    setZones(nextZones);
-    setSelectedPointIndex(null);
+    updateZonesForSelectedCamera(nextZones);
+        setSelectedPointIndex(null);
   }
 
   function handleDeletePointAt(index) {
@@ -1249,7 +1433,7 @@ export default function App() {
     if (!zone || zone.points.length <= 3) return;
 
     zone.points.splice(index, 1);
-    setZones(nextZones);
+    updateZonesForSelectedCamera(nextZones);
 
     if (selectedPointIndex === index) {
       setSelectedPointIndex(null);
@@ -1271,7 +1455,7 @@ export default function App() {
       y: clamp(fallback.y + 0.02, 0, 1),
     });
 
-    setZones(nextZones);
+    updateZonesForSelectedCamera(nextZones);
     setSelectedPointIndex(zone.points.length - 1);
   }
 
@@ -1284,14 +1468,19 @@ export default function App() {
     if (!zone || !zone.points[index]) return;
 
     zone.points[index][axis] = clamp(numeric, 0, 1);
-    setZones(nextZones);
-    setSelectedPointIndex(index);
+    updateZonesForSelectedCamera(nextZones);
+        setSelectedPointIndex(index);
   }
 
   function handleResetZones() {
-    setZones(cloneZones(DEFAULT_ZONES));
-    setSelectedZoneId(DEFAULT_ZONES[0].id);
+    const resetZones = buildDefaultZonesByCamera();
+  
+    setZonesByCamera(resetZones);
+    setSelectedZoneIdByCamera(buildDefaultSelectedZoneIdByCamera());
     setSelectedPointIndex(null);
+  
+    localStorage.removeItem(STORAGE_KEYS.zonesByCamera);
+    localStorage.removeItem(STORAGE_KEYS.selectedZoneIdByCamera);
   }
 
   function handleAddZone() {
@@ -1308,8 +1497,8 @@ export default function App() {
       ],
     };
 
-    setZones([...zones, newZone]);
-    setSelectedZoneId(newId);
+    updateZonesForSelectedCamera([...zones, newZone]);
+        setSelectedZoneIdForSelectedCamera(newId);
     setSelectedPointIndex(null);
   }
 
@@ -1319,21 +1508,24 @@ export default function App() {
     if (!zone) return;
 
     zone.label = value;
-    setZones(nextZones);
-  }
+    updateZonesForSelectedCamera(nextZones);
+    }
 
   function handleSelectedZoneChange(zoneId) {
-    setSelectedZoneId(zoneId);
+    setSelectedZoneIdForSelectedCamera(zoneId);
     setSelectedPointIndex(null);
   }
 
-  const selectedZone = zones.find((z) => z.id === selectedZoneId);
-  const activeManningDuration =
-    manningStateRef.current.confirmedStartedAt
-      ? formatDurationMs(
-          Date.now() - manningStateRef.current.confirmedStartedAt.getTime()
-        )
-      : "0s";
+  const selectedZone =
+  (zonesByCamera[selectedCameraId] || []).find((z) => z.id === selectedZoneId) ||
+  null;
+
+const activeManningDuration =
+  manningStateRef.current.confirmedStartedAt
+    ? formatDurationMs(
+        Date.now() - manningStateRef.current.confirmedStartedAt.getTime()
+      )
+    : "0s";
 
   return (
     <div
@@ -1365,6 +1557,32 @@ export default function App() {
           }}
         >
           <h3 style={{ marginTop: 0 }}>Control Panel</h3>
+
+          <h4 style={{ marginBottom: 8 }}>Selected Camera</h4>
+
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 8,
+    marginBottom: 18,
+  }}
+>
+  {cameraConfigs.map((cam) => (
+    <button
+      key={cam.id}
+      onClick={() => {
+        setSelectedCameraId(cam.id);
+        setSelectedPointIndex(null);
+      }}
+      style={{
+        ...buttonStyle(selectedCameraId === cam.id ? "#2563eb" : "#334155"),
+      }}
+    >
+      {cam.label}
+    </button>
+  ))}
+</div>
 
           <div style={{ display: "grid", gap: 10, marginBottom: 18 }}>
             <label>
@@ -1439,6 +1657,100 @@ export default function App() {
               Add point mode
             </label>
           </div>
+
+          <h4 style={{ marginBottom: 8 }}>Camera Sources</h4>
+
+<div style={{ display: "grid", gap: 12, marginBottom: 18 }}>
+  {cameraConfigs.map((cam) => (
+    <div
+      key={cam.id}
+      style={{
+        border: "1px solid #173462",
+        borderRadius: 10,
+        padding: 10,
+        background: selectedCameraId === cam.id ? "#0b2148" : "#071935",
+      }}
+    >
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>{cam.label}</div>
+
+      <label style={{ display: "block", marginBottom: 8 }}>
+        <input
+          type="checkbox"
+          checked={cam.enabled}
+          onChange={(e) =>
+            updateCameraConfig(cam.id, "enabled", e.target.checked)
+          }
+        />{" "}
+        Enabled
+      </label>
+
+      <div style={{ display: "grid", gap: 8 }}>
+        <select
+          value={cam.sourceType}
+          onChange={(e) =>
+            updateCameraConfig(cam.id, "sourceType", e.target.value)
+          }
+          style={selectStyle}
+        >
+          <option value="webcam">Webcam</option>
+          <option value="ip">IP Camera</option>
+        </select>
+
+        <select
+          value={cam.transport}
+          onChange={(e) =>
+            updateCameraConfig(cam.id, "transport", e.target.value)
+          }
+          style={selectStyle}
+        >
+          <option value="direct">Direct</option>
+          <option value="relay">Relay</option>
+        </select>
+
+        <input
+          value={cam.streamUrl}
+          onChange={(e) =>
+            updateCameraConfig(cam.id, "streamUrl", e.target.value)
+          }
+          placeholder="http://192.168.x.x/... or relay url"
+          style={fullInputStyle}
+        />
+
+        <label>
+          <input
+            type="checkbox"
+            checked={cam.requiresAuth}
+            onChange={(e) =>
+              updateCameraConfig(cam.id, "requiresAuth", e.target.checked)
+            }
+          />{" "}
+          Requires auth
+        </label>
+
+        {cam.requiresAuth && (
+          <>
+            <input
+              value={cam.username}
+              onChange={(e) =>
+                updateCameraConfig(cam.id, "username", e.target.value)
+              }
+              placeholder="Username"
+              style={fullInputStyle}
+            />
+
+            <input
+              type="password"
+              defaultValue={cameraSecretsRef.current[cam.id]?.password || ""}
+              onChange={(e) => updateCameraPassword(cam.id, e.target.value)}
+              placeholder="Password (not saved)"
+              style={fullInputStyle}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  ))}
+</div>
 
           <h4 style={{ marginBottom: 8 }}>Watch Mode</h4>
 
@@ -1778,6 +2090,7 @@ export default function App() {
             <div>Manning candidate: {manningCandidateText}</div>
             <div>Manning confirmed: {manningConfirmedText}</div>
             <div>Active confirmed duration: {activeManningDuration}</div>
+            <div>Fusion watch count: {fusionWatchCount}</div>
             <div>
               Selected zone: {selectedZone ? selectedZone.label : "None"}
             </div>
@@ -1860,4 +2173,24 @@ const inputStyle = {
   border: "1px solid #35558c",
   background: "#0b2148",
   color: "#fff",
+};
+
+const fullInputStyle = {
+  width: "100%",
+  padding: "8px 10px",
+  borderRadius: 8,
+  border: "1px solid #35558c",
+  background: "#0b2148",
+  color: "#fff",
+  boxSizing: "border-box",
+};
+
+const selectStyle = {
+  width: "100%",
+  padding: "8px 10px",
+  borderRadius: 8,
+  border: "1px solid #35558c",
+  background: "#0b2148",
+  color: "#fff",
+  boxSizing: "border-box",
 };
