@@ -1017,6 +1017,14 @@ const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
       video.pause?.();
       video.removeAttribute("src");
       video.srcObject = null;
+      video.load?.();
+
+      trackedPersonsRef.current[cameraId] = [];
+nextTrackIdRef.current[cameraId] = 1;
+rawPeopleHistoryRef.current[cameraId] = [];
+rawWatchHistoryRef.current[cameraId] = [];
+perCameraWatchCountRef.current[cameraId] = 0;
+previousTorsoSizeRef.current[cameraId] = null;
     
       if (!config.enabled) return;
     
