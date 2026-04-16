@@ -78,6 +78,7 @@ const DEFAULT_CAMERA_CONFIGS = [
     streamUrl: "",
     username: "",
     requiresAuth: false,
+    deviceId: "",
   },
   {
     id: "camB",
@@ -88,6 +89,7 @@ const DEFAULT_CAMERA_CONFIGS = [
     streamUrl: "",
     username: "",
     requiresAuth: false,
+    deviceId: "",
   },
 ];
 
@@ -380,6 +382,9 @@ export default function App() {
     }
   });
 
+  const [videoDevices, setVideoDevices] = useState([]);
+const [deviceRefreshStatus, setDeviceRefreshStatus] = useState("Not loaded");
+
   const [cameraConfigDirty, setCameraConfigDirty] = useState(false);
 const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
   
@@ -448,6 +453,10 @@ const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
     minVisibility,
     minPresence,
   ]);
+
+  useEffect(() => {
+    loadVideoDevices();
+  }, []);
 
   useEffect(() => {
     zonesRef.current = zonesByCamera;
@@ -1013,36 +1022,47 @@ const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
         streamRefs.current[cameraId].getTracks().forEach((track) => track.stop());
         streamRefs.current[cameraId] = null;
       }
-    
+      
       video.pause?.();
       video.removeAttribute("src");
       video.srcObject = null;
       video.load?.();
-
+      
       trackedPersonsRef.current[cameraId] = [];
-nextTrackIdRef.current[cameraId] = 1;
-rawPeopleHistoryRef.current[cameraId] = [];
-rawWatchHistoryRef.current[cameraId] = [];
-perCameraWatchCountRef.current[cameraId] = 0;
-previousTorsoSizeRef.current[cameraId] = null;
+      nextTrackIdRef.current[cameraId] = 1;
+      rawPeopleHistoryRef.current[cameraId] = [];
+      rawWatchHistoryRef.current[cameraId] = [];
+      perCameraWatchCountRef.current[cameraId] = 0;
+      previousTorsoSizeRef.current[cameraId] = null;
     
       if (!config.enabled) return;
     
       if (config.sourceType === "webcam") {
+        const videoConstraints = config.deviceId
+          ? {
+              deviceId: { exact: config.deviceId },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            }
+          : {
+              facingMode: "user",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            };
+      
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user",
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
+          video: videoConstraints,
           audio: false,
         });
-    
+      
         streamRefs.current[cameraId] = stream;
         video.srcObject = stream;
         await video.play();
+      
+        await loadVideoDevices();
         return;
       }
+
     
       const resolvedUrl = buildCameraUrl(config);
       if (!resolvedUrl) return;
@@ -1327,6 +1347,25 @@ previousTorsoSizeRef.current[cameraId] = null;
     setCameraConfigDirty(false);
     setApplyCameraConfigTick((prev) => prev + 1);
   }
+
+  async function loadVideoDevices() {
+    try {
+      setDeviceRefreshStatus("Loading devices...");
+  
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter((d) => d.kind === "videoinput");
+  
+      setVideoDevices(cameras);
+      setDeviceRefreshStatus(
+        cameras.length
+          ? `${cameras.length} camera device(s) found`
+          : "No camera devices found"
+      );
+    } catch (error) {
+      console.error("Device list error:", error);
+      setDeviceRefreshStatus(`Device list error: ${error.message}`);
+    }
+  }
   
   function updateZonesForSelectedCamera(nextZones) {
     setZonesByCamera((prev) => ({
@@ -1345,6 +1384,8 @@ previousTorsoSizeRef.current[cameraId] = null;
   function getCameraConfig(cameraId) {
     return cameraConfigs.find((cam) => cam.id === cameraId);
   }
+
+
 
   function getCanvasInfo(cameraId) {
     const canvas = canvasRefs.current[cameraId];
@@ -1814,6 +1855,19 @@ const activeManningDuration =
 
           <h4 style={{ marginBottom: 8 }}>Camera Sources</h4>
 
+          <div style={{ marginBottom: 10 }}>
+  <button
+    onClick={loadVideoDevices}
+    style={buttonStyle("#475569")}
+  >
+    Refresh Camera Devices
+  </button>
+
+  <div style={{ marginTop: 6, fontSize: 12, color: "#cbd5e1" }}>
+    {deviceRefreshStatus}
+  </div>
+</div>
+
           <div style={{ marginBottom: 18 }}>
   <button
     onClick={handleApplyCameraConfigs}
@@ -1860,6 +1914,23 @@ const activeManningDuration =
           <option value="webcam">Webcam</option>
           <option value="ip">IP Camera</option>
         </select>
+
+        {cam.sourceType === "webcam" && (
+  <select
+    value={cam.deviceId || ""}
+    onChange={(e) =>
+      updateCameraConfig(cam.id, "deviceId", e.target.value)
+    }
+    style={selectStyle}
+  >
+    <option value="">Auto / Default Camera</option>
+    {videoDevices.map((device, index) => (
+      <option key={device.deviceId} value={device.deviceId}>
+        {device.label || `Camera ${index + 1}`}
+      </option>
+    ))}
+  </select>
+)}
 
         <select
           value={cam.transport}
@@ -2256,6 +2327,9 @@ const activeManningDuration =
             <div>Manning confirmed: {manningConfirmedText}</div>
             <div>Active confirmed duration: {activeManningDuration}</div>
             <div>Fusion watch count: {fusionWatchCount}</div>
+            <div>
+  Selected device: {getCameraConfig(selectedCameraId)?.deviceId || "Auto / Default"}
+</div>
             <div>
               Selected zone: {selectedZone ? selectedZone.label : "None"}
             </div>
