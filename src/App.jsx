@@ -379,6 +379,9 @@ export default function App() {
       return DEFAULT_CAMERA_CONFIGS;
     }
   });
+
+  const [cameraConfigDirty, setCameraConfigDirty] = useState(false);
+const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
   
   const cameraSecretsRef = useRef({
     camA: { password: "" },
@@ -1288,7 +1291,7 @@ export default function App() {
         }
       });
     };
-  }, []);
+  }, [applyCameraConfigTick]);
 
   const selectedZoneId = selectedZoneIdByCamera[selectedCameraId] || DEFAULT_ZONES[0].id;
   const zones = zonesByCamera[selectedCameraId] || cloneZones(DEFAULT_ZONES);
@@ -1299,13 +1302,22 @@ export default function App() {
         cam.id === cameraId ? { ...cam, [field]: value } : cam
       )
     );
+    setCameraConfigDirty(true);
   }
   
+
+
   function updateCameraPassword(cameraId, value) {
     cameraSecretsRef.current[cameraId] = {
       ...(cameraSecretsRef.current[cameraId] || {}),
       password: value,
     };
+    setCameraConfigDirty(true);
+  }
+
+  function handleApplyCameraConfigs() {
+    setCameraConfigDirty(false);
+    setApplyCameraConfigTick((prev) => prev + 1);
   }
   
   function updateZonesForSelectedCamera(nextZones) {
@@ -1793,6 +1805,17 @@ const activeManningDuration =
           </div>
 
           <h4 style={{ marginBottom: 8 }}>Camera Sources</h4>
+
+          <div style={{ marginBottom: 18 }}>
+  <button
+    onClick={handleApplyCameraConfigs}
+    style={{
+      ...buttonStyle(cameraConfigDirty ? "#dc2626" : "#2563eb"),
+    }}
+  >
+    {cameraConfigDirty ? "Apply Camera Config Changes" : "Reconnect Cameras"}
+  </button>
+</div>
 
 <div style={{ display: "grid", gap: 12, marginBottom: 18 }}>
   {cameraConfigs.map((cam) => (
