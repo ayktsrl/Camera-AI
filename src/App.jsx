@@ -283,6 +283,21 @@ export default function App() {
     camA: null,
     camB: null,
   });
+
+  const mjpegImgRefs = useRef({
+    camA: null,
+    camB: null,
+  });
+  
+  const bridgeCanvasRefs = useRef({
+    camA: null,
+    camB: null,
+  });
+  
+  const bridgeAnimationRefs = useRef({
+    camA: null,
+    camB: null,
+  });
   
   const animationRef = useRef(null);
   const frameIndexRef = useRef(0);
@@ -1005,21 +1020,84 @@ const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
         return config.streamUrl;
       }
     }
+
+    function stopMjpegBridge(cameraId) {
+      if (bridgeAnimationRefs.current[cameraId]) {
+        cancelAnimationFrame(bridgeAnimationRefs.current[cameraId]);
+        bridgeAnimationRefs.current[cameraId] = null;
+      }
+    
+      const img = mjpegImgRefs.current[cameraId];
+      if (img) {
+        img.onload = null;
+        img.onerror = null;
+        img.src = "";
+      }
+    }
+    
+    async function startMjpegBridge(cameraId, resolvedUrl) {
+      const video = videoRefs.current[cameraId];
+      const img = mjpegImgRefs.current[cameraId];
+      const bridgeCanvas = bridgeCanvasRefs.current[cameraId];
+    
+      if (!video || !img || !bridgeCanvas) {
+        throw new Error(`MJPEG bridge refs missing for ${cameraId}`);
+      }
+    
+      const ctx = bridgeCanvas.getContext("2d", { alpha: false });
+    
+      await new Promise((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error(`MJPEG load failed for ${cameraId}`));
+        img.crossOrigin = "anonymous";
+        img.src = resolvedUrl;
+      });
+    
+      const renderBridge = () => {
+        if (!img.naturalWidth || !img.naturalHeight) {
+          bridgeAnimationRefs.current[cameraId] = requestAnimationFrame(renderBridge);
+          return;
+        }
+    
+        if (
+          bridgeCanvas.width !== img.naturalWidth ||
+          bridgeCanvas.height !== img.naturalHeight
+        ) {
+          bridgeCanvas.width = img.naturalWidth;
+          bridgeCanvas.height = img.naturalHeight;
+        }
+    
+        ctx.drawImage(img, 0, 0, bridgeCanvas.width, bridgeCanvas.height);
+        bridgeAnimationRefs.current[cameraId] = requestAnimationFrame(renderBridge);
+      };
+    
+      renderBridge();
+    
+      const bridgeStream = bridgeCanvas.captureStream(12);
+      streamRefs.current[cameraId] = bridgeStream;
+      video.srcObject = bridgeStream;
+      video.muted = true;
+      video.playsInline = true;
+    
+      await video.play();
+    }
     
     async function connectCamera(cameraId, config) {
       const video = videoRefs.current[cameraId];
       if (!video) return;
     
+      stopMjpegBridge(cameraId);
+    
       if (streamRefs.current[cameraId]) {
         streamRefs.current[cameraId].getTracks().forEach((track) => track.stop());
         streamRefs.current[cameraId] = null;
       }
-      
+    
       video.pause?.();
       video.removeAttribute("src");
       video.srcObject = null;
       video.load?.();
-      
+    
       trackedPersonsRef.current[cameraId] = [];
       nextTrackIdRef.current[cameraId] = 1;
       rawPeopleHistoryRef.current[cameraId] = [];
@@ -1041,26 +1119,43 @@ const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
               width: { ideal: 1280 },
               height: { ideal: 720 },
             };
-      
+    
         const stream = await navigator.mediaDevices.getUserMedia({
           video: videoConstraints,
           audio: false,
         });
-      
+    
         streamRefs.current[cameraId] = stream;
         video.srcObject = stream;
+        video.muted = true;
+        video.playsInline = true;
         await video.play();
-      
+    
         await loadVideoDevices();
         return;
       }
-
     
       const resolvedUrl = buildCameraUrl(config);
       if (!resolvedUrl) return;
     
+      const lowerUrl = resolvedUrl.toLowerCase();
+      const useMjpegBridge =
+        config.sourceType === "ip" &&
+        (
+          lowerUrl.includes("mjpg") ||
+          lowerUrl.includes("mjpeg") ||
+          lowerUrl.includes("/cam")
+        );
+    
+      if (useMjpegBridge) {
+        await startMjpegBridge(cameraId, resolvedUrl);
+        return;
+      }
+    
       video.crossOrigin = "anonymous";
       video.src = resolvedUrl;
+      video.muted = true;
+      video.playsInline = true;
       await video.play();
     }
     
@@ -1311,6 +1406,9 @@ const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
         if (stream) {
           stream.getTracks().forEach((track) => track.stop());
         }
+      });
+      Object.keys(bridgeAnimationRefs.current).forEach((cameraId) => {
+        stopMjpegBridge(cameraId);
       });
     };
   }, [applyCameraConfigTick]);
@@ -2370,52 +2468,68 @@ const activeManningDuration =
       </div>
 
       <div
-        style={{
-          position: "relative",
-          width: "100%",
-          aspectRatio: `${STAGE_WIDTH} / ${STAGE_HEIGHT}`,
-          background: "#06122b",
-        }}
-      >
-        <video
-          ref={(el) => {
-            videoRefs.current[cam.id] = el;
-          }}
-          playsInline
-          muted
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            display: "block",
-            transform: mirrorView ? "scaleX(-1)" : "none",
-            opacity: showVideo ? 1 : 0,
-            zIndex: 1,
-          }}
-        />
+  style={{
+    position: "relative",
+    width: "100%",
+    aspectRatio: `${STAGE_WIDTH} / ${STAGE_HEIGHT}`,
+    background: "#06122b",
+  }}
+>
+  <img
+    ref={(el) => {
+      mjpegImgRefs.current[cam.id] = el;
+    }}
+    alt=""
+    style={{ display: "none" }}
+  />
 
-        <canvas
-          ref={(el) => {
-            canvasRefs.current[cam.id] = el;
-          }}
-          onMouseDown={(e) => handleCanvasMouseDown(cam.id, e)}
-          onMouseMove={(e) => handleCanvasMouseMove(cam.id, e)}
-          onMouseUp={handleCanvasMouseUp}
-          onMouseLeave={handleCanvasMouseUp}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            pointerEvents: "auto",
-            transform: mirrorView ? "scaleX(-1)" : "none",
-            cursor: "crosshair",
-            zIndex: 3,
-          }}
-        />
-      </div>
+  <canvas
+    ref={(el) => {
+      bridgeCanvasRefs.current[cam.id] = el;
+    }}
+    style={{ display: "none" }}
+  />
+
+  <video
+    ref={(el) => {
+      videoRefs.current[cam.id] = el;
+    }}
+    playsInline
+    muted
+    style={{
+      position: "absolute",
+      inset: 0,
+      width: "100%",
+      height: "100%",
+      objectFit: "cover",
+      display: "block",
+      transform: mirrorView ? "scaleX(-1)" : "none",
+      opacity: showVideo ? 1 : 0,
+      zIndex: 1,
+    }}
+  />
+
+  <canvas
+    ref={(el) => {
+      canvasRefs.current[cam.id] = el;
+    }}
+    onMouseDown={(e) => handleCanvasMouseDown(cam.id, e)}
+    onMouseMove={(e) => handleCanvasMouseMove(cam.id, e)}
+    onMouseUp={handleCanvasMouseUp}
+    onMouseLeave={handleCanvasMouseUp}
+    style={{
+      position: "absolute",
+      inset: 0,
+      width: "100%",
+      height: "100%",
+      pointerEvents: "auto",
+      transform: mirrorView ? "scaleX(-1)" : "none",
+      cursor: "crosshair",
+      zIndex: 3,
+    }}
+  />
+</div>
+
     </div>
   ))}
 </div>
