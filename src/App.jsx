@@ -1,3 +1,4 @@
+import * as mpVision from "./lib/vision_bundle.mjs";
 import { useEffect, useRef, useState } from "react";
 import "./index.css";
 
@@ -522,17 +523,8 @@ const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
   useEffect(() => {
     let isMounted = true;
 
-    async function waitForVision(maxWaitMs = 10000) {
-      const start = Date.now();
-
-      while (!window.vision) {
-        if (Date.now() - start > maxWaitMs) {
-          throw new Error("window.vision not loaded");
-        }
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-
-      return window.vision;
+    async function waitForVision() {
+      return mpVision;
     }
 
     function isPointReliable(point) {
