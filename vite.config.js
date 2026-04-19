@@ -1,8 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-const dahuaAuth = Buffer.from("admin:Geden123").toString("base64");
-
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -12,11 +10,9 @@ export default defineConfig({
         target: "http://10.0.30.101",
         changeOrigin: true,
         secure: false,
-        headers: {
-          Authorization: `Basic ${dahuaAuth}`,
-        },
+        auth: "admin:Geden123",
         rewrite: () => "/cgi-bin/mjpg/video.cgi?channel=1&subtype=1",
+        },
       },
-    },
   },
 });
