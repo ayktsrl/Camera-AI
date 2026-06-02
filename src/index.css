@@ -115,6 +115,27 @@ h1 {
   line-height: 1.6;
 }
 
+@keyframes firePulse {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 51, 34, 0.85); }
+  70%  { box-shadow: 0 0 0 24px rgba(255, 51, 34, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 51, 34, 0); }
+}
+
+@keyframes fireBadgeBlink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+.fire-alert-frame {
+  animation: firePulse 1.2s infinite;
+  outline: 3px solid #ff3322;
+  outline-offset: -3px;
+}
+
+.fire-alert-badge {
+  animation: fireBadgeBlink 0.8s infinite;
+}
+
 @media (max-width: 900px) {
   .stats {
     grid-template-columns: 1fr 1fr;

@@ -1,6 +1,11 @@
 import * as mpVision from "./lib/vision_bundle.mjs";
 import { useEffect, useRef, useState } from "react";
 import "./index.css";
+import {
+  analyzeFrame as analyzeFireFrame,
+  sensitivityToRatio,
+  ALARM_BEEP_DATA_URL,
+} from "./lib/fireDetector";
 
 const CONNECTIONS = [
   [11, 12],
@@ -67,7 +72,19 @@ const STORAGE_KEYS = {
   watchMode: "bridge_ai_watch_mode_v1",
   minVisibility: "bridge_ai_min_visibility_v1",
   minPresence: "bridge_ai_min_presence_v1",
+  fireLog: "bridge_ai_fire_log_v1",
+  fireSensitivity: "bridge_ai_fire_sensitivity_v1",
+  fireAudioMuted: "bridge_ai_fire_audio_muted_v1",
+  fireTestMode: "bridge_ai_fire_test_mode_v1",
+  fireDetectionEnabled: "bridge_ai_fire_detection_enabled_v1",
 };
+
+// Fire detection identifiers.
+const FIRE_ZONE_TYPE = "fire";
+const FIRE_COLOR = "#ff3322";
+const FIRE_ANALYZE_INTERVAL_MS = 200;
+const FIRE_EVENT_MIN_GAP_MS = 1500;
+const FIRE_LOG_LIMIT = 30;
 
 const DEFAULT_CAMERA_CONFIGS = [
   {
@@ -348,6 +365,21 @@ export default function App() {
     confirmedMode: "DAY",
   });
 
+  // Fire detection refs.
+  const fireOffscreenCanvasesRef = useRef({ camA: null, camB: null });
+  const fireHistoryRef = useRef({ camA: {}, camB: {} });
+  const fireLastAnalyzeAtRef = useRef({ camA: 0, camB: 0 });
+  const fireActiveStatesRef = useRef({}); // key: `${camId}::${zoneId}` -> { startedAt, lastSeenAt }
+  const fireDebugSamplesRef = useRef({ camA: {}, camB: {} });
+  const fireAudioRef = useRef(null);
+  const fireLastBeepAtRef = useRef(0);
+  const fireSettingsRef = useRef({
+    enabled: true,
+    sensitivity: 5,
+    audioMuted: false,
+    testMode: false,
+  });
+
   const [status, setStatus] = useState("Loading...");
   const [personText, setPersonText] = useState("No detection");
   const [qualityText, setQualityText] = useState("Unknown");
@@ -366,6 +398,34 @@ export default function App() {
   const [manningCandidateText, setManningCandidateText] = useState("UNKNOWN");
   const [manningConfirmedText, setManningConfirmedText] = useState("UNKNOWN");
   const [manningLogs, setManningLogs] = useState([]);
+
+  // Fire detection state.
+  const [fireDetectionEnabled, setFireDetectionEnabled] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.fireDetectionEnabled);
+    return saved === null ? true : saved === "true";
+  });
+  const [fireSensitivity, setFireSensitivity] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.fireSensitivity);
+    return saved ? Number(saved) : 5;
+  });
+  const [fireAudioMuted, setFireAudioMuted] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.fireAudioMuted);
+    return saved === "true";
+  });
+  const [fireTestMode, setFireTestMode] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.fireTestMode);
+    return saved === "true";
+  });
+  const [fireLog, setFireLog] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.fireLog);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  // `activeFires` shape: { [camId::zoneId]: { camId, cameraLabel, zoneId, zoneLabel, startedAt } }
+  const [activeFires, setActiveFires] = useState({});
 
   const [showVideo, setShowVideo] = useState(true);
   const [showSkeleton, setShowSkeleton] = useState(true);
@@ -535,6 +595,67 @@ const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
     watchModeRef.current = watchMode;
   }, [watchMode]);
 
+  // Fire detection persistence + ref sync.
+  useEffect(() => {
+    fireSettingsRef.current = {
+      enabled: fireDetectionEnabled,
+      sensitivity: fireSensitivity,
+      audioMuted: fireAudioMuted,
+      testMode: fireTestMode,
+    };
+  }, [fireDetectionEnabled, fireSensitivity, fireAudioMuted, fireTestMode]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      STORAGE_KEYS.fireDetectionEnabled,
+      String(fireDetectionEnabled)
+    );
+  }, [fireDetectionEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.fireSensitivity, String(fireSensitivity));
+  }, [fireSensitivity]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.fireAudioMuted, String(fireAudioMuted));
+  }, [fireAudioMuted]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.fireTestMode, String(fireTestMode));
+  }, [fireTestMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.fireLog, JSON.stringify(fireLog));
+    } catch {
+      /* ignore quota */
+    }
+  }, [fireLog]);
+
+  // Update browser tab title based on active fires.
+  useEffect(() => {
+    const activeKeys = Object.keys(activeFires);
+    const base = "Bridge AI";
+    if (activeKeys.length > 0) {
+      const first = activeFires[activeKeys[0]];
+      document.title = `FIRE — ${first.zoneLabel} | ${base}`;
+    } else {
+      document.title = base;
+    }
+  }, [activeFires]);
+
+  // Lazy-init the audio element so it's reusable across alarms.
+  useEffect(() => {
+    if (!fireAudioRef.current) {
+      try {
+        fireAudioRef.current = new Audio(ALARM_BEEP_DATA_URL);
+        fireAudioRef.current.preload = "auto";
+      } catch {
+        fireAudioRef.current = null;
+      }
+    }
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -654,7 +775,28 @@ const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
     
       currentZones.forEach((zone) => {
         if (!zone.points.length) return;
-    
+        // Fire zones are rendered by drawFireOverlay. We still draw the
+        // editable handles here when the zone is currently selected.
+        if (zone.type === FIRE_ZONE_TYPE) {
+          if (isSelectedCamera && zone.id === currentSelectedZoneId) {
+            zone.points.forEach((point, index) => {
+              const px = point.x * width;
+              const py = point.y * height;
+              ctx.beginPath();
+              ctx.fillStyle =
+                index === currentSelectedPointIndex ? "#ffffff" : FIRE_COLOR;
+              ctx.arc(px, py, 6, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.beginPath();
+              ctx.strokeStyle = "#1a0000";
+              ctx.lineWidth = 2;
+              ctx.arc(px, py, 6, 0, Math.PI * 2);
+              ctx.stroke();
+            });
+          }
+          return;
+        }
+
         ctx.strokeStyle = zone.color;
         ctx.lineWidth =
           isSelectedCamera && zone.id === currentSelectedZoneId ? 3 : 2;
@@ -1203,11 +1345,219 @@ const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
       }
     }
     
+    function getCameraLabel(cameraId) {
+      const cfg = cameraConfigs.find((c) => c.id === cameraId);
+      return cfg?.label || cameraId;
+    }
+
+    function getFireOffscreen(cameraId) {
+      let off = fireOffscreenCanvasesRef.current[cameraId];
+      if (!off) {
+        off = document.createElement("canvas");
+        off.width = 320;
+        off.height = 180;
+        fireOffscreenCanvasesRef.current[cameraId] = off;
+      }
+      return off;
+    }
+
+    function getFireZonesForCamera(cameraId) {
+      const all = zonesRef.current[cameraId] || [];
+      return all.filter((z) => z.type === FIRE_ZONE_TYPE);
+    }
+
+    function maybePlayAlarm() {
+      const settings = fireSettingsRef.current;
+      if (settings.audioMuted) return;
+      const now = performance.now();
+      if (now - fireLastBeepAtRef.current < 900) return;
+      fireLastBeepAtRef.current = now;
+      const audio = fireAudioRef.current;
+      if (!audio) return;
+      try {
+        audio.currentTime = 0;
+        const p = audio.play();
+        if (p && typeof p.catch === "function") {
+          // Autoplay may be blocked until first user gesture; swallow.
+          p.catch(() => {});
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    function drawFireOverlay(ctx, cameraId, fireResults, width, height) {
+      const fireZones = getFireZonesForCamera(cameraId);
+      if (!fireZones.length) return;
+
+      fireZones.forEach((zone) => {
+        const res = fireResults[zone.id];
+        if (!res) return;
+
+        const isOnFire = res.isOnFire;
+        const stroke = isOnFire ? "#ff3322" : zone.color || FIRE_COLOR;
+        const fill = isOnFire ? "rgba(255,51,34,0.28)" : "rgba(255,51,34,0.08)";
+
+        ctx.save();
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = isOnFire ? 4 : 2;
+        if (isOnFire) {
+          // pulsing alpha
+          const t = (performance.now() % 800) / 800;
+          ctx.globalAlpha = 0.55 + 0.45 * Math.abs(Math.sin(t * Math.PI));
+        }
+        ctx.fillStyle = fill;
+
+        ctx.beginPath();
+        ctx.moveTo(zone.points[0].x * width, zone.points[0].y * height);
+        for (let i = 1; i < zone.points.length; i++) {
+          ctx.lineTo(zone.points[i].x * width, zone.points[i].y * height);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = stroke;
+        ctx.font = "bold 14px Arial";
+        const label = isOnFire
+          ? `FIRE — ${zone.label} (${(res.fireRatio * 100).toFixed(1)}%)`
+          : `${zone.label} (${(res.fireRatio * 100).toFixed(1)}%)`;
+        ctx.fillText(
+          label,
+          zone.points[0].x * width + 8,
+          zone.points[0].y * height - 8
+        );
+        ctx.restore();
+
+        // Debug overlay — visualize sampled flame pixels.
+        if (fireSettingsRef.current.testMode && res.samplePoints?.length) {
+          ctx.save();
+          ctx.fillStyle = "rgba(255, 200, 0, 0.9)";
+          for (const p of res.samplePoints) {
+            ctx.fillRect(p.x * width - 2, p.y * height - 2, 4, 4);
+          }
+          ctx.restore();
+        }
+      });
+    }
+
+    function handleFireResults(cameraId, fireResults) {
+      const now = performance.now();
+      const wallNow = new Date();
+      let changed = false;
+
+      // Snapshot current state for comparison.
+      const prev = fireActiveStatesRef.current;
+
+      for (const [zoneId, res] of Object.entries(fireResults)) {
+        const key = `${cameraId}::${zoneId}`;
+        const zone = (zonesRef.current[cameraId] || []).find(
+          (z) => z.id === zoneId
+        );
+        const zoneLabel = zone?.label || zoneId;
+        const camLabel = getCameraLabel(cameraId);
+
+        if (res.isOnFire) {
+          if (!prev[key]) {
+            prev[key] = {
+              camId: cameraId,
+              cameraLabel: camLabel,
+              zoneId,
+              zoneLabel,
+              startedAt: wallNow.getTime(),
+              lastSeenAt: now,
+            };
+            changed = true;
+            maybePlayAlarm();
+          } else {
+            prev[key].lastSeenAt = now;
+          }
+        } else if (prev[key]) {
+          // End event if not seen recently.
+          if (now - prev[key].lastSeenAt > FIRE_EVENT_MIN_GAP_MS) {
+            const ended = prev[key];
+            delete prev[key];
+            changed = true;
+
+            const event = {
+              id: `${ended.startedAt}_${cameraId}_${zoneId}`,
+              cameraId,
+              cameraLabel: ended.cameraLabel,
+              zoneId,
+              zoneLabel: ended.zoneLabel,
+              startedAt: ended.startedAt,
+              endedAt: wallNow.getTime(),
+              durationMs: wallNow.getTime() - ended.startedAt,
+            };
+            setFireLog((curr) => [event, ...curr].slice(0, FIRE_LOG_LIMIT));
+          }
+        }
+      }
+
+      if (changed) {
+        // Mirror ref into state so UI reacts.
+        setActiveFires({ ...prev });
+      }
+    }
+
+    function runFireDetection(cameraId) {
+      const settings = fireSettingsRef.current;
+      if (!settings.enabled && !settings.testMode) return;
+
+      const fireZones = getFireZonesForCamera(cameraId);
+      if (!fireZones.length) return;
+
+      const now = performance.now();
+      const last = fireLastAnalyzeAtRef.current[cameraId] || 0;
+      if (now - last < FIRE_ANALYZE_INTERVAL_MS) return;
+      fireLastAnalyzeAtRef.current[cameraId] = now;
+
+      const video = videoRefs.current[cameraId];
+      if (!video || video.readyState < 2) return;
+
+      const off = getFireOffscreen(cameraId);
+      const offCtx = off.getContext("2d", { willReadFrequently: true });
+      if (!offCtx) return;
+
+      try {
+        offCtx.drawImage(video, 0, 0, off.width, off.height);
+      } catch {
+        return;
+      }
+
+      let imageData;
+      try {
+        imageData = offCtx.getImageData(0, 0, off.width, off.height);
+      } catch {
+        // Cross-origin tainted — skip.
+        return;
+      }
+
+      const ratioThreshold = sensitivityToRatio(settings.sensitivity);
+      const results = analyzeFireFrame(
+        imageData,
+        fireZones,
+        fireHistoryRef.current[cameraId],
+        {
+          ratioThreshold,
+          debugSamples: settings.testMode,
+        }
+      );
+
+      fireDebugSamplesRef.current[cameraId] = results;
+
+      // Test mode disables alarm logic but keeps visualization.
+      if (settings.enabled) {
+        handleFireResults(cameraId, results);
+      }
+    }
+
     function processCamera(cameraId) {
       const video = videoRefs.current[cameraId];
       const canvas = canvasRefs.current[cameraId];
       const pose = poseRefs.current[cameraId];
-    
+
       if (!video || !canvas || !pose || video.readyState < 2) return;
     
       const ctx = canvas.getContext("2d");
@@ -1370,8 +1720,21 @@ const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
       }
     
       drawZones(ctx, canvas.width, canvas.height, cameraId);
+
+      // Fire detection — sample at ~200ms cadence to avoid hammering pose.
+      runFireDetection(cameraId);
+
+      // Always draw fire overlay so user can see zones + state.
+      const lastFireResults = fireDebugSamplesRef.current[cameraId] || {};
+      drawFireOverlay(
+        ctx,
+        cameraId,
+        lastFireResults,
+        canvas.width,
+        canvas.height
+      );
     }
-    
+
     function loop() {
       if (!isMounted) return;
     
@@ -1789,6 +2152,31 @@ const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
     setSelectedPointIndex(null);
   }
 
+  function handleAddFireWatchZone() {
+    const existingFire = zones.filter((z) => z.type === FIRE_ZONE_TYPE).length;
+    const newId = `fire_${Date.now()}`;
+    const newZone = {
+      id: newId,
+      label: `Fire Watch Zone ${existingFire + 1}`,
+      color: FIRE_COLOR,
+      type: FIRE_ZONE_TYPE,
+      points: [
+        { x: 0.35, y: 0.55 },
+        { x: 0.6, y: 0.55 },
+        { x: 0.6, y: 0.8 },
+        { x: 0.35, y: 0.8 },
+      ],
+    };
+
+    updateZonesForSelectedCamera([...zones, newZone]);
+    setSelectedZoneIdForSelectedCamera(newId);
+    setSelectedPointIndex(null);
+  }
+
+  function handleClearFireLog() {
+    setFireLog([]);
+  }
+
   function handleZoneLabelChange(value) {
     const nextZones = cloneZones(zones);
     const zone = nextZones.find((z) => z.id === selectedZoneId);
@@ -2184,6 +2572,13 @@ const activeManningDuration =
               Add New Zone
             </button>
 
+            <button
+              onClick={handleAddFireWatchZone}
+              style={buttonStyle("#b91c1c")}
+            >
+              Add Fire Watch Zone
+            </button>
+
             <button onClick={handleAddPointRow} style={buttonStyle("#2563eb")}>
               Add Point Row
             </button>
@@ -2337,6 +2732,156 @@ const activeManningDuration =
             </table>
           </div>
 
+          <h4 style={{ marginBottom: 8 }}>Fire Detection</h4>
+
+          <div
+            style={{
+              marginBottom: 14,
+              padding: 12,
+              borderRadius: 10,
+              background: "#1a0606",
+              border: "1px solid #4a1010",
+              display: "grid",
+              gap: 10,
+            }}
+          >
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={fireDetectionEnabled}
+                onChange={(e) => setFireDetectionEnabled(e.target.checked)}
+              />
+              Enable detection
+            </label>
+
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={fireAudioMuted}
+                onChange={(e) => setFireAudioMuted(e.target.checked)}
+              />
+              Mute alarm audio
+            </label>
+
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={fireTestMode}
+                onChange={(e) => setFireTestMode(e.target.checked)}
+              />
+              Test mode (visualize pixel hits, no alarm)
+            </label>
+
+            <div>
+              <div style={{ marginBottom: 4 }}>
+                Sensitivity: {fireSensitivity} / 10
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                step="1"
+                value={fireSensitivity}
+                onChange={(e) => setFireSensitivity(Number(e.target.value))}
+                style={{ width: "100%" }}
+              />
+              <div style={{ fontSize: 11, color: "#fecaca" }}>
+                Higher = more sensitive (lower pixel threshold).
+              </div>
+            </div>
+          </div>
+
+          <h4 style={{ marginBottom: 8 }}>Fire Events (last {FIRE_LOG_LIMIT})</h4>
+
+          <div
+            style={{
+              marginBottom: 18,
+              border: "1px solid #4a1010",
+              borderRadius: 10,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                padding: 8,
+                background: "#1a0606",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <span style={{ fontSize: 12, color: "#fecaca" }}>
+                Active: {Object.keys(activeFires).length} | Total logged:{" "}
+                {fireLog.length}
+              </span>
+              <button
+                onClick={handleClearFireLog}
+                disabled={fireLog.length === 0}
+                style={{
+                  background: fireLog.length === 0 ? "#475569" : "#7f1d1d",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  cursor: fireLog.length === 0 ? "not-allowed" : "pointer",
+                  fontSize: 12,
+                }}
+              >
+                Clear log
+              </button>
+            </div>
+
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: 12,
+              }}
+            >
+              <thead style={{ background: "#2a0808" }}>
+                <tr>
+                  <th style={thStyle}>Start</th>
+                  <th style={thStyle}>Camera</th>
+                  <th style={thStyle}>Zone</th>
+                  <th style={thStyle}>Dur.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.values(activeFires).map((f) => (
+                  <tr
+                    key={`active_${f.camId}_${f.zoneId}`}
+                    style={{ background: "#3b0a0a" }}
+                  >
+                    <td style={tdStyle}>
+                      {formatClock(new Date(f.startedAt))}
+                    </td>
+                    <td style={tdStyle}>{f.cameraLabel}</td>
+                    <td style={tdStyle}>{f.zoneLabel}</td>
+                    <td style={tdStyle}>LIVE</td>
+                  </tr>
+                ))}
+                {fireLog.length === 0 && Object.keys(activeFires).length === 0 ? (
+                  <tr>
+                    <td style={tdStyle} colSpan={4}>
+                      No fire events logged
+                    </td>
+                  </tr>
+                ) : (
+                  fireLog.slice(0, 10).map((ev) => (
+                    <tr key={ev.id}>
+                      <td style={tdStyle}>
+                        {formatClock(new Date(ev.startedAt))}
+                      </td>
+                      <td style={tdStyle}>{ev.cameraLabel}</td>
+                      <td style={tdStyle}>{ev.zoneLabel}</td>
+                      <td style={tdStyle}>{formatDurationMs(ev.durationMs)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
           <h4 style={{ marginBottom: 8 }}>Manning Log</h4>
 
           <div
@@ -2390,6 +2935,29 @@ const activeManningDuration =
         </div>
 
         <div>
+          {Object.keys(activeFires).length > 0 && (
+            <div
+              className="fire-alert-badge"
+              style={{
+                background: "linear-gradient(90deg, #7f1d1d, #b91c1c)",
+                color: "#fff",
+                padding: "14px 18px",
+                borderRadius: 12,
+                marginBottom: 12,
+                fontWeight: 800,
+                fontSize: 16,
+                letterSpacing: 0.5,
+                border: "2px solid #ff3322",
+                boxShadow: "0 0 24px rgba(255,51,34,0.45)",
+              }}
+            >
+              FIRE DETECTED —{" "}
+              {Object.values(activeFires)
+                .map((f) => `${f.cameraLabel} / ${f.zoneLabel}`)
+                .join(", ")}
+            </div>
+          )}
+
           <div
             style={{
               background: "#081a3a",
@@ -2438,15 +3006,21 @@ const activeManningDuration =
     gap: 16,
   }}
 >
-  {cameraConfigs.map((cam) => (
+  {cameraConfigs.map((cam) => {
+    const camHasFire = Object.values(activeFires).some(
+      (f) => f.camId === cam.id
+    );
+    return (
     <div
       key={cam.id}
+      className={camHasFire ? "fire-alert-frame" : ""}
       style={{
         borderRadius: 14,
         overflow: "hidden",
         background: "#06122b",
-        border:
-          selectedCameraId === cam.id
+        border: camHasFire
+          ? "2px solid #ff3322"
+          : selectedCameraId === cam.id
             ? "2px solid #3b82f6"
             : "1px solid #173462",
       }}
@@ -2531,7 +3105,8 @@ const activeManningDuration =
 </div>
 
     </div>
-  ))}
+    );
+  })}
 </div>
         </div>
       </div>
