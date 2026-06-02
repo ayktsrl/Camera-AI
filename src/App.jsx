@@ -4,6 +4,8 @@ import "./index.css";
 import {
   analyzeFrame as analyzeFireFrame,
   sensitivityToRatio,
+  createBackgroundBuffer,
+  createPersistencyMap,
   ALARM_BEEP_DATA_URL,
 } from "./lib/fireDetector";
 
@@ -371,6 +373,10 @@ export default function App() {
   const fireLastAnalyzeAtRef = useRef({ camA: 0, camB: 0 });
   const fireActiveStatesRef = useRef({}); // key: `${camId}::${zoneId}` -> { startedAt, lastSeenAt }
   const fireDebugSamplesRef = useRef({ camA: {}, camB: {} });
+  // Multi-factor scoring state (one per camera).
+  const fireBackgroundBufferRef = useRef({ camA: null, camB: null });
+  const firePersistencyRef = useRef({ camA: null, camB: null });
+  const fireFrameIndexRef = useRef({ camA: 0, camB: 0 });
   const fireAudioRef = useRef(null);
   const fireLastBeepAtRef = useRef(0);
   const fireSettingsRef = useRef({
@@ -1534,13 +1540,30 @@ const [applyCameraConfigTick, setApplyCameraConfigTick] = useState(0);
         return;
       }
 
-      const ratioThreshold = sensitivityToRatio(settings.sensitivity);
+      const sensRatio = sensitivityToRatio(settings.sensitivity);
+
+      // Lazy-init background buffer + persistency map per camera.
+      if (!fireBackgroundBufferRef.current[cameraId]) {
+        fireBackgroundBufferRef.current[cameraId] = createBackgroundBuffer(
+          off.width,
+          off.height
+        );
+      }
+      if (!firePersistencyRef.current[cameraId]) {
+        firePersistencyRef.current[cameraId] = createPersistencyMap();
+      }
+
+      fireFrameIndexRef.current[cameraId] =
+        (fireFrameIndexRef.current[cameraId] || 0) + 1;
+
       const results = analyzeFireFrame(
         imageData,
         fireZones,
         fireHistoryRef.current[cameraId],
         {
-          ratioThreshold,
+          sensRatio,
+          backgroundBuffer: fireBackgroundBufferRef.current[cameraId],
+          persistencyMap: firePersistencyRef.current[cameraId],
           debugSamples: settings.testMode,
         }
       );
@@ -2789,6 +2812,14 @@ const activeManningDuration =
                 Higher = more sensitive (lower pixel threshold).
               </div>
             </div>
+
+            {fireTestMode && (
+              <FireBreakdownPanel
+                debugSamplesRef={fireDebugSamplesRef}
+                zonesRef={zonesRef}
+                cameraConfigs={cameraConfigs}
+              />
+            )}
           </div>
 
           <h4 style={{ marginBottom: 8 }}>Fire Events (last {FIRE_LOG_LIMIT})</h4>
@@ -3144,6 +3175,126 @@ const fullInputStyle = {
   background: "#0b2148",
   color: "#fff",
   boxSizing: "border-box",
+};
+
+// ---------------------------------------------------------------------------
+// FireBreakdownPanel — shows per-zone factor scores when test mode is on.
+// Reads ref data; ticks ~5x/sec to refresh.
+// ---------------------------------------------------------------------------
+function FireBreakdownPanel({ debugSamplesRef, zonesRef, cameraConfigs }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => (n + 1) & 0xffff), 200);
+    return () => clearInterval(id);
+  }, []);
+
+  const rows = [];
+  for (const cam of cameraConfigs) {
+    if (!cam.enabled) continue;
+    const results = debugSamplesRef.current?.[cam.id] || {};
+    const zones = zonesRef.current?.[cam.id] || [];
+    for (const zone of zones) {
+      const res = results[zone.id];
+      if (!res || !res.breakdown) continue;
+      rows.push({
+        camLabel: cam.label || cam.id,
+        zoneLabel: zone.label || zone.id,
+        ...res.breakdown,
+        ratio: res.fireRatio,
+        onFire: res.isOnFire,
+      });
+    }
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div style={fireBreakdownContainerStyle}>
+        <div style={fireBreakdownTitleStyle}>Score breakdown</div>
+        <div style={{ fontSize: 11, color: "#9ca3af" }}>
+          Waiting for Fire Watch zones with active analysis…
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={fireBreakdownContainerStyle}>
+      <div style={fireBreakdownTitleStyle}>Score breakdown (test mode)</div>
+      <div style={{ display: "grid", gap: 6 }}>
+        {rows.map((r, i) => (
+          <div
+            key={`${r.camLabel}_${r.zoneLabel}_${i}`}
+            style={{
+              padding: "6px 8px",
+              borderRadius: 6,
+              background: r.onFire ? "#3b0a0a" : "#0f0a0a",
+              border: `1px solid ${r.onFire ? "#ff3322" : "#3a1010"}`,
+              fontSize: 11,
+              lineHeight: 1.45,
+            }}
+          >
+            <div style={{ fontWeight: 600, color: r.onFire ? "#ff7766" : "#fecaca" }}>
+              {r.camLabel} — {r.zoneLabel}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <ScoreBar label="Color"   value={r.color}   />
+              <ScoreBar label="Motion"  value={r.motion}  />
+              <ScoreBar label="Flicker" value={r.flicker} />
+              <ScoreBar label="Persist" value={r.persistency} />
+            </div>
+            <div style={{ marginTop: 3, color: "#fee2e2" }}>
+              Final: {r.final.toFixed(2)} | Hot-pixel ratio: {(r.ratio * 100).toFixed(1)}%{" "}
+              {r.onFire ? "→ ALARM" : ""}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ScoreBar({ label, value }) {
+  const v = Math.max(0, Math.min(1, value || 0));
+  const hue = v < 0.4 ? 200 : v < 0.7 ? 40 : 0; // blue → amber → red
+  return (
+    <div style={{ minWidth: 90 }}>
+      <div style={{ color: "#cbd5e1" }}>
+        {label}: {v.toFixed(2)}
+      </div>
+      <div
+        style={{
+          height: 4,
+          width: "100%",
+          background: "#1f2937",
+          borderRadius: 2,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${v * 100}%`,
+            height: "100%",
+            background: `hsl(${hue}, 80%, 55%)`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+const fireBreakdownContainerStyle = {
+  marginTop: 4,
+  padding: 10,
+  borderRadius: 8,
+  background: "#0d0303",
+  border: "1px solid #3a1010",
+};
+
+const fireBreakdownTitleStyle = {
+  fontWeight: 700,
+  fontSize: 12,
+  color: "#fecaca",
+  marginBottom: 8,
 };
 
 const selectStyle = {

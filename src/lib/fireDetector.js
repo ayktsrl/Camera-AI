@@ -1,52 +1,83 @@
-// Heuristic fire/flame detector — zero ML, browser-native pixel analysis.
+// Multi-factor flame detector — zero ML, browser-native pixel analysis.
 //
-// Approach:
-//   1. Sample every Nth pixel from an ImageData buffer.
-//   2. For each sampled pixel, score "flame-likeness" using:
-//        - dominant orange/red channel ordering (R > G > B)
-//        - high brightness  (R + G + B > brightnessMin)
-//        - high saturation  ((max - min) / max > satMin)
-//   3. Count flame pixels per active "Fire Watch Zone" (point-in-polygon).
-//   4. Track per-zone history (last N samples). Flicker = variance of recent
-//      counts; static lamps / sunlit windows fail this test.
-//   5. A zone is "on fire" when:
-//        - fireRatio >= ratioThreshold (>3% pixels by default)
-//        - flickerScore >= flickerThreshold
+// Replaces the previous heuristic RGB-only scorer. Now combines 4 independent
+// signals per sampled pixel:
+//
+//   1. colorScore       — HSV-based flame color (hue near orange, saturated, bright).
+//   2. motionScore      — delta vs slowly-updated background buffer (kills static lamps).
+//   3. flickerScore     — coefficient-of-variation of last 8 zone ratios (kills sun glare).
+//   4. persistencyScore — same grid cell hot for 3+ consecutive frames (kills camera flash).
+//
+// Per-pixel final score:
+//     pixelScore = colorScore*0.40 + motionScore*0.20 + flickerScore*0.25 + persistencyScore*0.15
+//
+// Zone-level decision uses hysteresis:
+//   - rising  edge: avgScore >= 0.60  AND  ratio(pixelScore > 0.5) >= sensRatio
+//   - falling edge: avgScore <  0.35  OR   ratio < sensRatio*0.5
 //
 // Pure JS. No deps. Safe to import from React.
+// ---------------------------------------------------------------------------
 
-const SAMPLE_STRIDE = 4;            // every 4th pixel (4x speedup)
-const HISTORY_SIZE = 5;             // last 5 samples for flicker test
-const DEFAULT_RATIO_THRESHOLD = 0.03;  // 3% of sampled zone pixels
-const DEFAULT_FLICKER_THRESHOLD = 0.18; // normalized stdev of recent ratios
-const DEFAULT_BRIGHTNESS_MIN = 400; // R + G + B
-const DEFAULT_SAT_MIN = 0.4;        // (max-min)/max
+const SAMPLE_STRIDE = 4;            // every 4th pixel inside zone bbox
+const HISTORY_SIZE = 8;             // last 8 ratios for flicker CV
+const PERSIST_GRID_W = 16;          // persistency map cells (x)
+const PERSIST_GRID_H = 9;           // persistency map cells (y)
+const PERSIST_DECAY = 1;            // how many frames an inactive cell drops by
+const PERSIST_FULL_FRAMES = 5;      // active >=5 frames -> persistencyScore 1.0
+const BG_ALPHA = 0.05;              // EMA weight for new frame into background
+const BG_WARMUP_FRAMES = 30;        // before this, motionScore = 0 (no false alarms)
 
-// Sensitivity 1..10 — maps to ratioThreshold (lower = more sensitive)
+const RISE_AVG_SCORE = 0.60;
+const FALL_AVG_SCORE = 0.35;
+
+// Per-pixel weights — sum to 1.0.
+const W_COLOR = 0.40;
+const W_MOTION = 0.20;
+const W_FLICKER = 0.25;
+const W_PERSIST = 0.15;
+
+// Sensitivity 1..10 -> ratio threshold for "high-scoring pixel" fraction.
+// Slider only moves THIS knob; the per-pixel score function is fixed.
+// Sensitivity 1  -> 0.10  (very strict)
+// Sensitivity 5  -> 0.04  (default)
+// Sensitivity 10 -> 0.012 (loose)
 export function sensitivityToRatio(sensitivity) {
   const s = Math.max(1, Math.min(10, Number(sensitivity) || 5));
-  // sensitivity 10 -> 0.008, sensitivity 1 -> 0.08
-  return 0.08 - ((s - 1) / 9) * 0.072;
+  return 0.10 - ((s - 1) / 9) * 0.088;
 }
 
-// Returns true if pixel (r,g,b) looks like flame.
-export function isFlamePixel(r, g, b, brightnessMin = DEFAULT_BRIGHTNESS_MIN, satMin = DEFAULT_SAT_MIN) {
-  // Color test — narıncı/kırmızı dominant.
-  if (!(r > 200 && g > 80 && g < 200 && b < 100 && r - b > 100)) return false;
-  // Brightness test.
-  if (r + g + b < brightnessMin) return false;
-  // Channel ordering — R > G > B strictly.
-  if (!(r >= g && g >= b)) return false;
-  // Saturation test — avoid white/grey near-saturation.
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  if (max === 0) return false;
-  const sat = (max - min) / max;
-  if (sat < satMin) return false;
-  return true;
+// ---------- color: RGB -> HSV (cheap inline form) -------------------------
+function rgbToHsv(r, g, b) {
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = rn > gn ? (rn > bn ? rn : bn) : (gn > bn ? gn : bn);
+  const min = rn < gn ? (rn < bn ? rn : bn) : (gn < bn ? gn : bn);
+  const v = max;
+  const d = max - min;
+  const s = max === 0 ? 0 : d / max;
+  let h = 0;
+  if (d !== 0) {
+    if (max === rn) h = ((gn - bn) / d) % 6;
+    else if (max === gn) h = (bn - rn) / d + 2;
+    else h = (rn - gn) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h, s, v };
 }
 
-// pointInPolygon for normalized [0..1] coordinates.
+// Color score in [0,1] — peaks at hue=30 (orange), needs sat & value.
+function colorScoreHSV(r, g, b) {
+  const { h, s, v } = rgbToHsv(r, g, b);
+  // Hue gate: only 0..60 deg counts as flame-colored.
+  if (h > 60 && h < 360) return 0;
+  // Folded hue distance from 30 deg (clamps wrap-around).
+  const hueDist = Math.abs(h - 30);
+  const hueTerm = Math.max(0, (60 - hueDist) / 60); // 1 at 30, 0 at 60 or -30
+  if (s < 0.4 || v < 0.5) return 0;
+  return hueTerm * s * v;
+}
+
+// ---------- polygon helpers ----------------------------------------------
 function pointInPolygonNorm(x, y, polygon) {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -62,7 +93,6 @@ function pointInPolygonNorm(x, y, polygon) {
   return inside;
 }
 
-// Computes axis-aligned bbox in normalized coords for a polygon.
 function zoneBBox(points) {
   let minX = 1, maxX = 0, minY = 1, maxY = 0;
   for (const p of points) {
@@ -74,49 +104,111 @@ function zoneBBox(points) {
   return { minX, maxX, minY, maxY };
 }
 
-// Welford-style stdev / mean of last N values.
-function stdev(values) {
-  if (values.length < 2) return 0;
-  let mean = 0;
-  for (const v of values) mean += v;
-  mean /= values.length;
-  let sq = 0;
-  for (const v of values) sq += (v - mean) * (v - mean);
-  return Math.sqrt(sq / values.length);
-}
-
-// Normalized flicker — stdev divided by (mean + epsilon).
-function flickerScore(ratios) {
-  if (ratios.length < 2) return 0;
+// ---------- flicker (coefficient of variation of last N ratios) -----------
+function flickerCV(ratios) {
+  if (ratios.length < 3) return 0;
   let mean = 0;
   for (const v of ratios) mean += v;
   mean /= ratios.length;
-  const sd = stdev(ratios);
-  return sd / (mean + 0.005);
+  if (mean < 0.005) return 0; // ratios essentially zero -> no signal
+  let sq = 0;
+  for (const v of ratios) sq += (v - mean) * (v - mean);
+  const sd = Math.sqrt(sq / ratios.length);
+  return sd / mean;
 }
 
+function flickerToScore(cv) {
+  // CV ~0.15 -> 0 (normal scene), ~0.65+ -> 1 (flame).
+  if (cv <= 0.15) return 0;
+  const x = (cv - 0.15) / 0.5;
+  return x < 0 ? 0 : x > 1 ? 1 : x;
+}
+
+// ---------- background buffer ---------------------------------------------
+// Buffer layout: width*height*3 Uint8ClampedArray storing rolling EMA in RGB.
+// Updated incrementally for every SAMPLED pixel (not every pixel).
+
+export function createBackgroundBuffer(width, height) {
+  return {
+    width,
+    height,
+    rgb: new Uint8ClampedArray(width * height * 3),
+    frameCount: 0,
+  };
+}
+
+function bgGet(buf, x, y) {
+  const i = (y * buf.width + x) * 3;
+  return [buf.rgb[i], buf.rgb[i + 1], buf.rgb[i + 2]];
+}
+
+function bgUpdate(buf, x, y, r, g, b) {
+  const i = (y * buf.width + x) * 3;
+  if (buf.frameCount === 0) {
+    buf.rgb[i] = r; buf.rgb[i + 1] = g; buf.rgb[i + 2] = b;
+    return;
+  }
+  // EMA
+  buf.rgb[i]     = (1 - BG_ALPHA) * buf.rgb[i]     + BG_ALPHA * r;
+  buf.rgb[i + 1] = (1 - BG_ALPHA) * buf.rgb[i + 1] + BG_ALPHA * g;
+  buf.rgb[i + 2] = (1 - BG_ALPHA) * buf.rgb[i + 2] + BG_ALPHA * b;
+}
+
+function motionScoreFromDelta(delta) {
+  // delta 0..120+, score saturates at 40.
+  if (delta <= 8) return 0;        // dead-zone to ignore sensor noise
+  const x = (delta - 8) / 32;
+  return x < 0 ? 0 : x > 1 ? 1 : x;
+}
+
+// ---------- persistency map ----------------------------------------------
+// One map per camera. Stored as { cells: Int16Array(W*H), zoneCells: { [zoneId]: Set<idx> } }.
+
+export function createPersistencyMap() {
+  return {
+    w: PERSIST_GRID_W,
+    h: PERSIST_GRID_H,
+    cells: new Int16Array(PERSIST_GRID_W * PERSIST_GRID_H),
+    seenThisFrame: new Uint8Array(PERSIST_GRID_W * PERSIST_GRID_H),
+  };
+}
+
+function persistCellIdx(nx, ny) {
+  const cx = Math.min(PERSIST_GRID_W - 1, Math.max(0, Math.floor(nx * PERSIST_GRID_W)));
+  const cy = Math.min(PERSIST_GRID_H - 1, Math.max(0, Math.floor(ny * PERSIST_GRID_H)));
+  return cy * PERSIST_GRID_W + cx;
+}
+
+function persistScore(activeFrames) {
+  if (activeFrames <= 0) return 0;
+  const x = activeFrames / PERSIST_FULL_FRAMES;
+  return x > 1 ? 1 : x;
+}
+
+// ---------- main entry ----------------------------------------------------
+
 /**
- * Analyze one video frame for flame presence inside Fire Watch zones.
+ * Analyze one video frame.
  *
- * @param {ImageData} imageData          - Pixel buffer from offscreen canvas.
- * @param {Array}     fireZones          - Array of { id, label, points: [{x,y}] }.
- * @param {Object}    history            - Per-zone history map; mutated in-place.
- *                                         Shape: { [zoneId]: { ratios: [], sampledHits: [] } }.
+ * @param {ImageData} imageData
+ * @param {Array}     fireZones
+ * @param {Object}    history   - mutated. Shape: { [zoneId]: { ratios:[], onFire:bool } }
  * @param {Object}    options
- * @param {number}    options.ratioThreshold   - Min fireRatio to flag (default 0.03).
- * @param {number}    options.flickerThreshold - Min normalized stdev (default 0.18).
- * @param {number}    options.brightnessMin
- * @param {number}    options.satMin
+ * @param {number}    options.sensRatio        - fraction-of-hot-pixels threshold (1..0).
+ * @param {Object}    options.backgroundBuffer - createBackgroundBuffer() result, mutated.
+ * @param {Object}    options.persistencyMap   - createPersistencyMap() result, mutated.
+ * @param {boolean}   options.debugSamples
  *
- * @returns {Object} Map of zoneId -> { firePixels, sampledPixels, fireRatio, flicker, isOnFire, samplePoints }
- *                   samplePoints is an array of { x, y } in normalized coords for debug overlay.
+ * @returns {Object} zoneId -> {
+ *   firePixels, sampledPixels, fireRatio, avgScore, isOnFire,
+ *   samplePoints, breakdown: { color, motion, flicker, persistency, final }
+ * }
  */
 export function analyzeFrame(imageData, fireZones, history, options = {}) {
   const {
-    ratioThreshold = DEFAULT_RATIO_THRESHOLD,
-    flickerThreshold = DEFAULT_FLICKER_THRESHOLD,
-    brightnessMin = DEFAULT_BRIGHTNESS_MIN,
-    satMin = DEFAULT_SAT_MIN,
+    sensRatio = 0.04,
+    backgroundBuffer = null,
+    persistencyMap = null,
     debugSamples = false,
   } = options;
 
@@ -124,17 +216,17 @@ export function analyzeFrame(imageData, fireZones, history, options = {}) {
   if (!imageData || !fireZones || fireZones.length === 0) return result;
 
   const { data, width, height } = imageData;
+  const bg = backgroundBuffer;
+  const pm = persistencyMap;
+
+  // Clear "seen this frame" for persistency aging at the end.
+  if (pm) pm.seenThisFrame.fill(0);
+
+  const warmingUp = bg && bg.frameCount < BG_WARMUP_FRAMES;
 
   for (const zone of fireZones) {
     if (!zone.points || zone.points.length < 3) {
-      result[zone.id] = {
-        firePixels: 0,
-        sampledPixels: 0,
-        fireRatio: 0,
-        flicker: 0,
-        isOnFire: false,
-        samplePoints: [],
-      };
+      result[zone.id] = emptyZoneResult();
       continue;
     }
 
@@ -144,9 +236,16 @@ export function analyzeFrame(imageData, fireZones, history, options = {}) {
     const y0 = Math.max(0, Math.floor(bbox.minY * height));
     const y1 = Math.min(height - 1, Math.ceil(bbox.maxY * height));
 
-    let firePixels = 0;
+    let firePixels = 0;      // high-score (>0.5) pixels
     let sampled = 0;
+    let sumScore = 0;
+    let sumColor = 0;
+    let sumMotion = 0;
     const samplePoints = debugSamples ? [] : null;
+
+    // Compute previous-frame flicker score once per zone.
+    const histEntry = ensureHistory(history, zone.id);
+    const flickScore = flickerToScore(flickerCV(histEntry.ratios));
 
     for (let y = y0; y <= y1; y += SAMPLE_STRIDE) {
       for (let x = x0; x <= x1; x += SAMPLE_STRIDE) {
@@ -158,50 +257,152 @@ export function analyzeFrame(imageData, fireZones, history, options = {}) {
         const r = data[idx];
         const g = data[idx + 1];
         const b = data[idx + 2];
-        if (isFlamePixel(r, g, b, brightnessMin, satMin)) {
+
+        // 1. color
+        const cScore = colorScoreHSV(r, g, b);
+
+        // 2. motion
+        let mScore = 0;
+        if (bg && !warmingUp) {
+          const [br, bg2, bb] = bgGet(bg, x, y);
+          const delta = Math.abs(r - br) + Math.abs(g - bg2) + Math.abs(b - bb);
+          mScore = motionScoreFromDelta(delta);
+        }
+        if (bg) bgUpdate(bg, x, y, r, g, b);
+
+        // 3. flicker (zone-level, same for every pixel in this pass)
+        const fScore = flickScore;
+
+        // 4. persistency (cell-level from previous frame)
+        let pScore = 0;
+        if (pm) {
+          const cellIdx = persistCellIdx(nx, ny);
+          pScore = persistScore(pm.cells[cellIdx]);
+        }
+
+        const pixelScore =
+          cScore * W_COLOR +
+          mScore * W_MOTION +
+          fScore * W_FLICKER +
+          pScore * W_PERSIST;
+
+        sumScore += pixelScore;
+        sumColor += cScore;
+        sumMotion += mScore;
+
+        if (pixelScore > 0.5) {
           firePixels++;
           if (debugSamples) samplePoints.push({ x: nx, y: ny });
+          // Mark cell as active this frame -> next frame persistency bumps.
+          if (pm) {
+            const cellIdx = persistCellIdx(nx, ny);
+            pm.seenThisFrame[cellIdx] = 1;
+          }
         }
       }
     }
 
     const fireRatio = sampled > 0 ? firePixels / sampled : 0;
+    const avgScore = sampled > 0 ? sumScore / sampled : 0;
+    const avgColor = sampled > 0 ? sumColor / sampled : 0;
+    const avgMotion = sampled > 0 ? sumMotion / sampled : 0;
 
-    if (!history[zone.id]) {
-      history[zone.id] = { ratios: [] };
+    // Update zone ratio history (for next-frame flicker).
+    histEntry.ratios.push(fireRatio);
+    if (histEntry.ratios.length > HISTORY_SIZE) histEntry.ratios.shift();
+
+    // Hysteresis.
+    const wasOnFire = !!histEntry.onFire;
+    let isOnFire;
+    if (warmingUp) {
+      isOnFire = false;
+    } else if (wasOnFire) {
+      // Falling edge — easier to leave.
+      isOnFire =
+        avgScore >= FALL_AVG_SCORE && fireRatio >= sensRatio * 0.5;
+    } else {
+      // Rising edge — strict.
+      isOnFire =
+        avgScore >= RISE_AVG_SCORE && fireRatio >= sensRatio;
     }
-    const h = history[zone.id];
-    h.ratios.push(fireRatio);
-    if (h.ratios.length > HISTORY_SIZE) h.ratios.shift();
+    histEntry.onFire = isOnFire;
 
-    const flicker = flickerScore(h.ratios);
-    const isOnFire =
-      fireRatio >= ratioThreshold && flicker >= flickerThreshold;
+    // Average persistency across active cells, only for debug breakdown.
+    let avgPersist = 0;
+    if (pm && samplePoints && samplePoints.length) {
+      let sumP = 0;
+      for (const p of samplePoints) {
+        sumP += persistScore(pm.cells[persistCellIdx(p.x, p.y)]);
+      }
+      avgPersist = sumP / samplePoints.length;
+    }
 
     result[zone.id] = {
       firePixels,
       sampledPixels: sampled,
       fireRatio,
-      flicker,
+      avgScore,
       isOnFire,
       samplePoints: samplePoints || [],
+      breakdown: {
+        color: avgColor,
+        motion: avgMotion,
+        flicker: flickScore,
+        persistency: avgPersist,
+        final: avgScore,
+      },
     };
   }
+
+  // After all zones processed, age the persistency map exactly once.
+  if (pm) {
+    for (let i = 0; i < pm.cells.length; i++) {
+      if (pm.seenThisFrame[i]) {
+        pm.cells[i] = Math.min(PERSIST_FULL_FRAMES + 2, pm.cells[i] + 1);
+      } else {
+        pm.cells[i] = Math.max(0, pm.cells[i] - PERSIST_DECAY);
+      }
+    }
+  }
+
+  if (bg) bg.frameCount = Math.min(BG_WARMUP_FRAMES * 4, bg.frameCount + 1);
 
   return result;
 }
 
-// Small built-in 8-bit PCM beep, base64 WAV (~0.4s, 880Hz square).
-// Generated offline, embedded here to avoid asset files.
-// Approx 6 KB encoded; trimmed for short alarm chirp.
+function ensureHistory(history, zoneId) {
+  if (!history[zoneId]) history[zoneId] = { ratios: [], onFire: false };
+  return history[zoneId];
+}
+
+function emptyZoneResult() {
+  return {
+    firePixels: 0,
+    sampledPixels: 0,
+    fireRatio: 0,
+    avgScore: 0,
+    isOnFire: false,
+    samplePoints: [],
+    breakdown: { color: 0, motion: 0, flicker: 0, persistency: 0, final: 0 },
+  };
+}
+
+// Kept for backwards compatibility — callers in App.jsx may still import it.
+// Now returns the HSV color score > 0.3 as a coarse boolean.
+export function isFlamePixel(r, g, b) {
+  return colorScoreHSV(r, g, b) > 0.3;
+}
+
+// ---------------------------------------------------------------------------
+// Small built-in 8-bit PCM beep, base64 WAV (~0.45s, 880Hz square).
+// Generated at module init to avoid asset files.
+// ---------------------------------------------------------------------------
 export const ALARM_BEEP_DATA_URL = (() => {
-  // Build a tiny WAV in-memory at module init.
   const sampleRate = 8000;
   const duration = 0.45;
   const total = Math.floor(sampleRate * duration);
   const buf = new Uint8Array(44 + total);
 
-  // RIFF header.
   const writeStr = (off, s) => {
     for (let i = 0; i < s.length; i++) buf[off + i] = s.charCodeAt(i);
   };
@@ -230,7 +431,6 @@ export const ALARM_BEEP_DATA_URL = (() => {
   writeStr(36, "data");
   writeU32(40, total);
 
-  // Square wave 880Hz, with gentle envelope.
   for (let i = 0; i < total; i++) {
     const t = i / sampleRate;
     const env = Math.min(1, t * 12) * Math.min(1, (duration - t) * 12);
@@ -239,7 +439,6 @@ export const ALARM_BEEP_DATA_URL = (() => {
     buf[44 + i] = sample;
   }
 
-  // base64
   let bin = "";
   for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
   const b64 =
