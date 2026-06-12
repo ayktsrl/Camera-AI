@@ -1,3 +1,21 @@
+/* FormCoach — "Antrenman Panosu"
+   Kamera ana sahne; chrome koyu stüdyo zemininde kaybolur.
+   Tek aile: Space Grotesk (self-host). Tek accent: kireç. Uyarı: amber. */
+
+:root {
+  --ink: #131512;
+  --ink-raise: #191c18;
+  --paper: #f4f4f1;
+  --muted: rgba(244, 244, 241, 0.52);
+  --faint: rgba(244, 244, 241, 0.28);
+  --hairline: rgba(244, 244, 241, 0.14);
+  --accent: #c8f24e;
+  --warn: #f0b454;
+  --font:
+    "Space Grotesk Variable", "Space Grotesk", "Avenir Next", "Helvetica Neue",
+    sans-serif;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -7,134 +25,368 @@ body,
 #root {
   margin: 0;
   min-height: 100%;
-  font-family: Arial, sans-serif;
-  background: #0b1020;
-  color: #ffffff;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.45;
 }
 
-body {
+/* ---- Yerleşim ---- */
+
+.app {
   min-height: 100vh;
-}
-
-.page {
-  min-height: 100vh;
-  padding: 24px;
-}
-
-.panel {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-h1 {
-  margin: 0 0 8px;
-  font-size: 34px;
-}
-
-.subtitle {
-  margin: 0 0 16px;
-  color: #b9c2d0;
-}
-
-.badges {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
-}
-
-.badge {
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: #18213a;
-  border: 1px solid #2a3659;
-  color: #d8e3ff;
-  font-size: 14px;
-}
-
-.stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 0;
 }
 
-.card {
-  background: #141c30;
-  border: 1px solid #26314f;
-  border-radius: 16px;
-  padding: 16px;
-}
+/* ---- Sahne (kamera) ---- */
 
-.label {
-  font-size: 13px;
-  color: #9fb0d1;
-  margin-bottom: 8px;
-}
-
-.value {
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.videoWrap {
+.stage {
   position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: #000;
-  border-radius: 20px;
   overflow: hidden;
-  border: 1px solid #26314f;
+  min-height: 60vh;
 }
 
-.video,
-.canvas {
+.stage-video,
+.stage-canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  transform: scaleX(-1); /* ayna — kullanıcı kendini doğal görür */
 }
 
-.video {
+.stage-video {
   object-fit: cover;
-  transform: scaleX(-1);
 }
 
-.canvas {
+.stage-canvas {
   pointer-events: none;
-  transform: scaleX(-1);
 }
 
-.note {
-  margin-top: 16px;
-  padding: 16px;
-  border-radius: 16px;
-  background: #141c30;
-  border: 1px solid #26314f;
-  color: #cbd5e1;
-  line-height: 1.6;
+.stage-notice {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+  background: rgba(19, 21, 18, 0.55);
+  color: var(--muted);
+  font-size: 17px;
+  letter-spacing: 0.01em;
 }
 
-@media (max-width: 900px) {
-  .stats {
-    grid-template-columns: 1fr 1fr;
-  }
+/* Devasa tekrar sayacı — sahnenin sol üstüne bindirilmiş tipografi */
+.stage-count {
+  position: absolute;
+  top: 8px;
+  left: 28px;
+  font-size: clamp(96px, 22vh, 200px);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+  text-shadow: 0 0 24px rgba(0, 0, 0, 0.55);
+  animation: rep-pop 480ms cubic-bezier(0.2, 1.4, 0.4, 1);
+  user-select: none;
+}
 
-  h1 {
-    font-size: 28px;
+@keyframes rep-pop {
+  0% {
+    color: var(--accent);
+    transform: scale(1.12);
   }
-
-  .value {
-    font-size: 18px;
+  60% {
+    color: var(--accent);
+  }
+  100% {
+    color: var(--paper);
+    transform: scale(1);
   }
 }
 
-@media (max-width: 600px) {
-  .page {
-    padding: 14px;
-  }
+/* Anlık form uyarısı — sahne altı, amber */
+.stage-warning {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 32px;
+  text-align: center;
+  font-size: clamp(22px, 3.4vh, 34px);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--warn);
+  text-shadow: 0 1px 16px rgba(0, 0, 0, 0.7);
+  animation: warning-in 240ms ease-out;
+  pointer-events: none;
+}
 
-  .stats {
+@keyframes warning-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Panel ---- */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+  padding: 44px 32px 28px;
+  border-left: 1px solid var(--hairline);
+  background: var(--ink);
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.brand-dot {
+  color: var(--accent);
+}
+
+.brand-sub {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.block-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--faint);
+}
+
+/* Egzersiz seçimi */
+.exercise-select {
+  appearance: none;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--ink-raise);
+  color: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+  font-family: var(--font);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.exercise-select:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.exercise-select:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Faz göstergesi */
+.phases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.phase {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 15px;
+  color: var(--faint);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: color 160ms ease;
+}
+
+.phase::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+.phase-active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Uyarı alanı (panel) */
+.warning-block {
+  min-height: 48px;
+  justify-content: center;
+}
+
+.warning-text {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--warn);
+}
+
+.warning-placeholder {
+  margin: 0;
+  font-size: 14px;
+  color: var(--faint);
+}
+
+/* Set özeti */
+.summary dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.summary dl > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.summary dt {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.summary dd {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Kontroller */
+.controls {
+  margin-top: auto;
+  flex-direction: row;
+  gap: 10px;
+}
+
+.btn {
+  flex: 1;
+  padding: 14px 16px;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--paper);
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.btn:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.btn-start {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.btn-start:not(:disabled):hover {
+  background: #d7fa6e;
+  border-color: #d7fa6e;
+}
+
+.btn-start:disabled {
+  background: var(--ink-raise);
+  border-color: var(--hairline);
+}
+
+.btn-stop {
+  border-color: var(--paper);
+}
+
+.btn-stop:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.btn-ghost:hover {
+  border-color: var(--paper);
+}
+
+.btn:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Alt bilgi */
+.meta {
+  font-size: 12.5px;
+  color: var(--faint);
+  letter-spacing: 0.02em;
+}
+
+/* ---- Mobil ---- */
+
+@media (max-width: 880px) {
+  .app {
     grid-template-columns: 1fr;
+  }
+
+  .stage {
+    min-height: 0;
+    aspect-ratio: 16 / 10;
+  }
+
+  .stage-count {
+    left: 18px;
+    font-size: clamp(72px, 18vw, 128px);
+  }
+
+  .stage-warning {
+    bottom: 16px;
+    font-size: 20px;
+  }
+
+  .panel {
+    border-left: none;
+    border-top: 1px solid var(--hairline);
+    padding: 28px 20px 20px;
+    gap: 28px;
+  }
+
+  .controls {
+    margin-top: 0;
   }
 }
