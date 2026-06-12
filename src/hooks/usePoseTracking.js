@@ -37,7 +37,9 @@ export function usePoseTracking({ videoRef, canvasRef, onFrame }) {
   const [hasActiveUser, setHasActiveUser] = useState(false);
 
   const onFrameRef = useRef(onFrame);
-  onFrameRef.current = onFrame;
+  useEffect(() => {
+    onFrameRef.current = onFrame;
+  });
 
   useEffect(() => {
     let isMounted = true;
