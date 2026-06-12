@@ -22,7 +22,7 @@ export function createTrackerState() {
 /**
  * Tespitleri mevcut track'lerle eşleştirir; yeni track açar, kayıpları sayar.
  * @param {object} state createTrackerState() çıktısı (yerinde güncellenir)
- * @param {Array<{landmarks, centerNorm, bbox}>} detections
+ * @param {Array<{landmarks, worldLandmarks, centerNorm, bbox}>} detections
  * @returns {Array} güncel track listesi
  */
 export function updateTracks(state, detections) {
@@ -61,6 +61,7 @@ export function updateTracks(state, detections) {
     const det = detections[detIndex];
 
     track.landmarks = det.landmarks;
+    track.worldLandmarks = det.worldLandmarks ?? null;
     track.centerNorm = det.centerNorm;
     track.bbox = det.bbox;
     track.lastSeenFrame = frameIndex;
@@ -78,6 +79,7 @@ export function updateTracks(state, detections) {
     tracks.push({
       id: state.nextTrackId++,
       landmarks: det.landmarks,
+      worldLandmarks: det.worldLandmarks ?? null,
       centerNorm: det.centerNorm,
       bbox: det.bbox,
       lastSeenFrame: frameIndex,

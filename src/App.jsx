@@ -4,6 +4,7 @@ import "./index.css";
 import { usePoseTracking } from "./hooks/usePoseTracking";
 import { useRepCounter } from "./hooks/useRepCounter";
 import { createCoach } from "./lib/speech";
+import { CAMERA_HINT_LABELS } from "./lib/faultRules";
 import { EXERCISES, getExercise } from "./exercises";
 
 const STORAGE_KEYS = {
@@ -73,10 +74,13 @@ export default function App() {
   const {
     processFrame,
     reset,
+    finishSet,
     phase,
     repCount,
     faultyCount,
     warning,
+    warningSeverity,
+    setSummary,
     repFlash,
     msSinceLastRep,
   } = useRepCounter({ exercise, running, onEvent: handleCoachEvent });
@@ -105,6 +109,7 @@ export default function App() {
 
   function handleToggleRun() {
     if (running) {
+      finishSet();
       setRunning(false);
       return;
     }
@@ -112,7 +117,11 @@ export default function App() {
     setRunning(true);
   }
 
-  const showSummary = !running && repCount > 0;
+  const summaryRules = setSummary?.rules ?? [];
+  const violatedRules = summaryRules.filter((r) => r.fires > 0);
+  const unevaluatedRules = summaryRules.filter((r) => r.unevaluated);
+  const showSummary =
+    !running && setSummary != null && (repCount > 0 || violatedRules.length > 0);
   const cleanReps = repCount - Math.min(faultyCount, repCount);
 
   let stageNotice = null;
@@ -137,7 +146,14 @@ export default function App() {
         )}
 
         {warning && running && (
-          <div className="stage-warning" role="alert">
+          <div
+            className={
+              warningSeverity === "critical"
+                ? "stage-warning stage-warning--critical"
+                : "stage-warning"
+            }
+            role="alert"
+          >
             {warning}
           </div>
         )}
@@ -194,7 +210,15 @@ export default function App() {
 
         <section className="block warning-block" aria-live="polite">
           {running && warning ? (
-            <p className="warning-text">{warning}</p>
+            <p
+              className={
+                warningSeverity === "critical"
+                  ? "warning-text warning-text--critical"
+                  : "warning-text"
+              }
+            >
+              {warning}
+            </p>
           ) : (
             <p className="warning-placeholder">
               {running ? "Form izleniyor" : "—"}
@@ -219,6 +243,29 @@ export default function App() {
                 <dd>{faultyCount}</dd>
               </div>
             </dl>
+
+            {violatedRules.length > 0 && (
+              <ul className="summary-faults">
+                {violatedRules.map((rule) => (
+                  <li key={rule.id} data-severity={rule.severity}>
+                    <span>{rule.label}</span>
+                    <span className="summary-fault-count">{rule.fires}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {unevaluatedRules.length > 0 && (
+              <p className="summary-note">
+                Değerlendirilemedi:{" "}
+                {unevaluatedRules
+                  .map(
+                    (rule) =>
+                      `${rule.label} (${CAMERA_HINT_LABELS[rule.cameraHint] ?? CAMERA_HINT_LABELS.any})`
+                  )
+                  .join(", ")}
+              </p>
+            )}
           </section>
         )}
 
@@ -248,6 +295,9 @@ export default function App() {
               : personCount === 1
                 ? "1 kişi görünüyor"
                 : "Kimse görünmüyor"}
+          </span>
+          <span className="meta-hint">
+            Önerilen kamera: 45° çapraz, ~2 m, kalça-diz yüksekliği
           </span>
         </footer>
       </aside>

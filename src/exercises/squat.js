@@ -1,31 +1,78 @@
 // Squat egzersiz tanımı — kod değil veri + saf metrik fonksiyonu.
 // Yeni egzersiz eklemek için bu şablonu kopyalayıp exercises/index.js'e kaydedin.
+//
+// v0.2 Precision Engine: açılar 3D world landmark'lardan (kamera açısı bağımsız);
+// topuk kalkması screen-2D'de kalır (world-z gürültüsü ~3 cm ölçeği yer).
+// Form kuralları bildirimsel faultRules[] şemasıyla tanımlanır — motor kural-bilinçsizdir.
 
-import { LM } from "../lib/pose";
+import { LM, isPointReliable, getBBoxFromLandmarks } from "../lib/pose";
 import { angleAtPoint, verticalTiltDeg, midpoint } from "../lib/angles";
-import { isPointReliable } from "../lib/pose";
+import {
+  angleAtPoint3D,
+  verticalTiltDeg3D,
+  midpoint3D,
+  fppaDeg,
+} from "../lib/angles3d";
 
-function sideKneeAngle(lm, side) {
-  const hip = lm[side === "left" ? LM.LEFT_HIP : LM.RIGHT_HIP];
-  const knee = lm[side === "left" ? LM.LEFT_KNEE : LM.RIGHT_KNEE];
-  const ankle = lm[side === "left" ? LM.LEFT_ANKLE : LM.RIGHT_ANKLE];
+const SIDE_JOINTS = {
+  left: { hip: LM.LEFT_HIP, knee: LM.LEFT_KNEE, ankle: LM.LEFT_ANKLE },
+  right: { hip: LM.RIGHT_HIP, knee: LM.RIGHT_KNEE, ankle: LM.RIGHT_ANKLE },
+};
 
-  if (
-    !isPointReliable(hip) ||
-    !isPointReliable(knee) ||
-    !isPointReliable(ankle)
-  ) {
-    return null;
+/** Tarafın eklemleri 2D visibility/presence ile güvenilir mi? */
+function sideReliable(lm, side) {
+  const j = SIDE_JOINTS[side];
+  return (
+    isPointReliable(lm[j.hip]) &&
+    isPointReliable(lm[j.knee]) &&
+    isPointReliable(lm[j.ankle])
+  );
+}
+
+/**
+ * Taraf diz açısı — world 3D varsa 3D (kamera açısı bağımsız), yoksa 2D fallback.
+ * Güvenilirlik kapısı her iki durumda 2D visibility'den okunur.
+ */
+function sideKneeAngle(lm, wlm, side) {
+  if (!sideReliable(lm, side)) return null;
+
+  const j = SIDE_JOINTS[side];
+  if (wlm) {
+    const angle3d = angleAtPoint3D(wlm[j.hip], wlm[j.knee], wlm[j.ankle]);
+    if (angle3d != null) return angle3d;
   }
+  return angleAtPoint(lm[j.hip], lm[j.knee], lm[j.ankle]);
+}
 
-  return angleAtPoint(hip, knee, ankle);
+/** Taraf FPPA (valgus) — 3D world, gövde-frontal düzleme projeksiyon. */
+function sideFppa(lm, wlm, side) {
+  if (!wlm || !sideReliable(lm, side)) return null;
+  const j = SIDE_JOINTS[side];
+  return fppaDeg(
+    wlm[j.hip],
+    wlm[j.knee],
+    wlm[j.ankle],
+    wlm[LM.LEFT_HIP],
+    wlm[LM.RIGHT_HIP]
+  );
+}
+
+/** Güvenilir topukların screen-y değerleri. */
+function reliableHeelYs(lm) {
+  const ys = [];
+  for (const idx of [LM.LEFT_HEEL, LM.RIGHT_HEEL]) {
+    const p = lm[idx];
+    if (isPointReliable(p, 0.5, 0.5)) ys.push(p.y);
+  }
+  return ys;
 }
 
 export const squat = {
   id: "squat",
   name: "Squat",
 
-  // Faz eşikleri (diz açısı, derece)
+  // Faz eşikleri (diz açısı, derece) — 3D diz açısıyla yeniden doğrulanacak,
+  // başlangıç değerleri v0.1 ile aynı (spec §2.4).
   phases: {
     standingMin: 160, // ayakta: diz açısı > 160°
     bottomMax: 100, // dipte: diz açısı < 100°
@@ -48,30 +95,131 @@ export const squat = {
     idle: "Hazır",
   },
 
-  // Form kuralları
-  rules: {
-    depth: {
-      message: "Biraz daha derine in",
-      speech: "Biraz daha derine in",
+  // Basit zemin kalibrasyonu — set başındaki ilk stabil ayakta karelerden
+  // topuk zemin çizgisi + vücut bbox yüksekliği alınır (heel kuralı normalizasyonu).
+  calibration: {
+    minStableFrames: 15,
+    isStable(metrics) {
+      return (
+        metrics.kneeAngle >= 160 &&
+        (metrics.torsoTilt3d == null || metrics.torsoTilt3d < 15)
+      );
     },
-    torso: {
-      maxTiltDeg: 45, // omuz-kalça hattının dikeyle açısı bu eşiği aşarsa
-      minFrames: 6, // anlık titreşimi elemek için ardışık frame şartı
-      message: "Sırtını dik tut",
-      speech: "Sırtını dik tut",
+    capture(lm) {
+      const heelYs = reliableHeelYs(lm);
+      if (!heelYs.length) return null;
+      const bbox = getBBoxFromLandmarks(lm);
+      if (!bbox || bbox.height <= 0) return null;
+      // Zemin = en alttaki topuk (screen-y aşağı doğru artar → max).
+      return { floorY: Math.max(...heelYs), bboxHeight: bbox.height };
+    },
+    finalize(samples) {
+      const mean = (key) =>
+        samples.reduce((sum, s) => sum + s[key], 0) / samples.length;
+      return { floorY: mean("floorY"), bboxHeight: mean("bboxHeight") };
     },
   },
 
+  // Form kuralları — bildirimsel şema (lib/faultRules.js işler).
+  // Histerezis: ihlal eşik∓tolerans dışında başlar, karşı bantta temizlenir.
+  faultRules: [
+    {
+      id: "depth",
+      label: "Derinlik",
+      metric: "minKneeAngle", // attempt bazlı — repEngine attempt kapanışında uygular
+      space: "world3d",
+      joints: [LM.LEFT_HIP, LM.LEFT_KNEE, LM.LEFT_ANKLE, LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE],
+      phases: ["attemptClose"], // özel: frame döngüsü dışı, deneme kapanışında
+      predicate: { op: "gt", threshold: 100, tolerance: 0 }, // dip ≤100° sayılır; 100–140° = yarım tekrar
+      severity: "major",
+      minVisibility: 0.6,
+      cameraHint: "side",
+      message: "Biraz daha derine in",
+      speech: "Biraz daha derine in",
+    },
+    {
+      id: "valgus",
+      label: "Diz içe çökmesi",
+      metric: "kneeValgusFPPA",
+      space: "world3d",
+      joints: [LM.LEFT_HIP, LM.LEFT_KNEE, LM.LEFT_ANKLE, LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE],
+      phases: ["descent", "bottom", "ascent"],
+      predicate: { op: "lt", threshold: 165, tolerance: 3 }, // <165° ≈ >15° medial çökme
+      minFrames: 5,
+      cooldownMs: 4000,
+      severity: "critical",
+      minVisibility: 0.6,
+      cameraHint: "front45",
+      message: "Dizlerini dışarı it",
+      speech: "Dizlerini dışarı it",
+    },
+    {
+      id: "torso",
+      label: "Gövde eğimi",
+      metric: "torsoTilt3d",
+      space: "world3d",
+      joints: [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER, LM.LEFT_HIP, LM.RIGHT_HIP],
+      phases: ["descent", "bottom", "ascent"],
+      // 45° low-bar'da normaldir; 3D ölçüm güvenilir olduğu için eşik 55°'e gevşetildi.
+      predicate: { op: "gt", threshold: 55, tolerance: 3 },
+      minFrames: 6,
+      cooldownMs: 4000,
+      severity: "major",
+      minVisibility: 0.6,
+      cameraHint: "side",
+      message: "Sırtını dik tut, göğsünü kaldır",
+      speech: "Sırtını dik tut, göğsünü kaldır",
+    },
+    {
+      id: "heel",
+      label: "Topuk kalkması",
+      metric: "heelLiftPct", // kalibre zeminden yükselme, bbox yüksekliği %'si
+      space: "screen2d", // world-z gürültüsü ~3 cm ölçeği yer — screen-y güvenilir
+      joints: [LM.LEFT_HEEL, LM.RIGHT_HEEL],
+      phases: ["descent", "bottom", "ascent"],
+      predicate: { op: "gt", threshold: 2, tolerance: 0.5 }, // > bbox'ın %2'si (~3–4 cm)
+      minFrames: 5,
+      cooldownMs: 4000,
+      severity: "major",
+      minVisibility: 0.5, // yan görüşte uzak topuk kısmen kapanabilir
+      cameraHint: "side",
+      message: "Topuklarını yerde tut",
+      speech: "Topuklarını yerde tut",
+    },
+    {
+      id: "asymmetry",
+      label: "Asimetri",
+      metric: "kneeAsymmetry",
+      space: "world3d",
+      joints: [LM.LEFT_HIP, LM.LEFT_KNEE, LM.LEFT_ANKLE, LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE],
+      phases: ["descent", "ascent"],
+      predicate: { op: "gt", threshold: 14, tolerance: 3 },
+      minFrames: 8,
+      cooldownMs: 4000,
+      severity: "minor",
+      minVisibility: 0.6,
+      cameraHint: "front45",
+      message: "Ağırlığı eşit dağıt",
+      speech: "Ağırlığı eşit dağıt",
+    },
+  ],
+
   /**
-   * Landmark'lardan squat metriklerini üretir.
+   * Landmark'lardan squat metriklerini üretir — kural motorunun tek veri kaynağı.
+   * Açılar world 3D'den (varsa), topuk screen-2D'den hesaplanır.
    * İki bacaktan güvenilir olanları ortalar; hiçbiri güvenilir değilse null.
-   * @returns {{kneeAngle:number, torsoTilt:number|null}|null}
+   *
+   * @param {Array} lm filtrelenmiş 2D normalize landmark'lar (visibility kaynağı)
+   * @param {Array|null} wlm filtrelenmiş 3D world landmark'lar (metre)
+   * @param {{floorY:number, bboxHeight:number}|null} calib zemin kalibrasyonu
+   * @returns {object|null} {kneeAngle, kneeAngleLeft, kneeAngleRight,
+   *   kneeAsymmetry, torsoTilt3d, kneeValgusFPPA, heelLiftPct}
    */
-  computeMetrics(lm) {
+  computeMetrics(lm, wlm, calib) {
     if (!lm) return null;
 
-    const left = sideKneeAngle(lm, "left");
-    const right = sideKneeAngle(lm, "right");
+    const left = sideKneeAngle(lm, wlm, "left");
+    const right = sideKneeAngle(lm, wlm, "right");
 
     let kneeAngle = null;
     if (left != null && right != null) kneeAngle = (left + right) / 2;
@@ -80,10 +228,51 @@ export const squat = {
 
     if (kneeAngle == null) return null;
 
-    const hipMid = midpoint(lm[LM.LEFT_HIP], lm[LM.RIGHT_HIP]);
-    const shoulderMid = midpoint(lm[LM.LEFT_SHOULDER], lm[LM.RIGHT_SHOULDER]);
-    const torsoTilt = verticalTiltDeg(hipMid, shoulderMid);
+    // Asimetri — iki taraf da ölçülebiliyorsa (tam yan görüşte null → kural susar).
+    const kneeAsymmetry =
+      left != null && right != null ? Math.abs(left - right) : null;
 
-    return { kneeAngle, torsoTilt };
+    // Gövde eğimi — world 3D dünya-dikeyi; world yoksa 2D fallback.
+    let torsoTilt3d = null;
+    if (wlm) {
+      torsoTilt3d = verticalTiltDeg3D(
+        midpoint3D(wlm[LM.LEFT_HIP], wlm[LM.RIGHT_HIP]),
+        midpoint3D(wlm[LM.LEFT_SHOULDER], wlm[LM.RIGHT_SHOULDER])
+      );
+    }
+    if (torsoTilt3d == null) {
+      torsoTilt3d = verticalTiltDeg(
+        midpoint(lm[LM.LEFT_HIP], lm[LM.RIGHT_HIP]),
+        midpoint(lm[LM.LEFT_SHOULDER], lm[LM.RIGHT_SHOULDER])
+      );
+    }
+
+    // Valgus FPPA — taraf başına, en kötü (en düşük) taraf raporlanır.
+    const fppaLeft = sideFppa(lm, wlm, "left");
+    const fppaRight = sideFppa(lm, wlm, "right");
+    const kneeValgusFPPA =
+      fppaLeft != null && fppaRight != null
+        ? Math.min(fppaLeft, fppaRight)
+        : (fppaLeft ?? fppaRight);
+
+    // Topuk kalkması — kalibre zeminden screen-y yükselme, bbox-% normalize.
+    let heelLiftPct = null;
+    if (calib && calib.bboxHeight > 0) {
+      const heelYs = reliableHeelYs(lm);
+      if (heelYs.length) {
+        const maxLift = Math.max(...heelYs.map((y) => calib.floorY - y));
+        heelLiftPct = (Math.max(0, maxLift) / calib.bboxHeight) * 100;
+      }
+    }
+
+    return {
+      kneeAngle,
+      kneeAngleLeft: left,
+      kneeAngleRight: right,
+      kneeAsymmetry,
+      torsoTilt3d,
+      kneeValgusFPPA,
+      heelLiftPct,
+    };
   },
 };

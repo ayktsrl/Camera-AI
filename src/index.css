@@ -11,6 +11,7 @@
   --hairline: rgba(244, 244, 241, 0.14);
   --accent: #c8f24e;
   --warn: #f0b454;
+  --critical: #f2785c;
   --font:
     "Space Grotesk Variable", "Space Grotesk", "Avenir Next", "Helvetica Neue",
     sans-serif;
@@ -127,6 +128,11 @@ body,
   text-shadow: 0 1px 16px rgba(0, 0, 0, 0.7);
   animation: warning-in 240ms ease-out;
   pointer-events: none;
+}
+
+/* Kritik kurallar (örn. diz valgus) — daha sıcak ton, aynı tipografi */
+.stage-warning--critical {
+  color: var(--critical);
 }
 
 @keyframes warning-in {
@@ -253,6 +259,10 @@ body,
   color: var(--warn);
 }
 
+.warning-text--critical {
+  color: var(--critical);
+}
+
 .warning-placeholder {
   margin: 0;
   font-size: 14px;
@@ -284,6 +294,42 @@ body,
   font-size: 24px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* Kural ihlal dağılımı — sade satır listesi, ana dl ile aynı ritim */
+.summary-faults {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-faults li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.summary-faults li[data-severity="critical"] {
+  color: var(--critical);
+}
+
+.summary-fault-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Değerlendirilemeyen kurallar — sessiz PASS yok, şeffaf not */
+.summary-note {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--faint);
 }
 
 /* Kontroller */
@@ -352,9 +398,16 @@ body,
 
 /* Alt bilgi */
 .meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   font-size: 12.5px;
   color: var(--faint);
   letter-spacing: 0.02em;
+}
+
+.meta-hint {
+  opacity: 0.85;
 }
 
 /* ---- Mobil ---- */

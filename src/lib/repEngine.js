@@ -4,10 +4,23 @@
 // Faz geçişleri confirm-frames debounce ile onaylanır (titreşimde çift sayma yok).
 // Yarım tekrar sayılmaz: dibe (bottomMax) ulaşmayan deneme tekrar DEĞİLDİR;
 // attemptBelow altına inilmişse derinlik hatası olarak işaretlenir.
+//
+// v0.2: form kuralları bildirimsel exercise.faultRules[] şemasından okunur ve
+// kural-bilinçsiz faultRules motoruyla işlenir (histerezis + cooldown + visibility
+// susturma). Motor 3D world landmark metrikleriyle beslenir; basit zemin
+// kalibrasyonu (heel kuralı) set başındaki ilk stabil ayakta karelerden alınır.
+
+import { createFaultRuleEngine } from "./faultRules";
 
 const METRICS_LOST_RESET_FRAMES = 30;
 
 export function createRepEngine(exercise) {
+  const attemptCloseRules = (exercise.faultRules ?? []).filter((r) =>
+    (r.phases ?? []).includes("attemptClose")
+  );
+  const depthRule = attemptCloseRules.find((r) => r.id === "depth") ?? null;
+
+  let ruleEngine = createFaultRuleEngine(exercise.faultRules ?? []);
   let state = freshState();
 
   function freshState() {
@@ -17,10 +30,11 @@ export function createRepEngine(exercise) {
       candidateFrames: 0,
       repCount: 0,
       faultyCount: 0,
-      attempt: null, // { minKneeAngle, torsoViolated }
-      torsoBadFrames: 0,
+      attempt: null, // { minKneeAngle, violations: Set<ruleId> }
       metricsLostFrames: 0,
       lastRepAt: null,
+      depthFires: 0,
+      calib: { samples: [], data: null },
     };
   }
 
@@ -48,20 +62,23 @@ export function createRepEngine(exercise) {
       // Tam tekrar — dibe inildi ve ayağa dönüldü.
       state.repCount += 1;
       state.lastRepAt = timestamp;
-      const faulty = attempt.torsoViolated;
+      const faults = [...attempt.violations];
+      const faulty = faults.length > 0;
       if (faulty) state.faultyCount += 1;
-      events.push({ type: "rep", count: state.repCount, faulty });
+      events.push({ type: "rep", count: state.repCount, faulty, faults });
       return;
     }
 
     if (attempt.minKneeAngle <= exercise.attemptBelow) {
       // Belirgin iniş var ama dibe ulaşılmadı → derinlik hatası, sayılmaz.
       state.faultyCount += 1;
+      state.depthFires += 1;
       events.push({
         type: "warning",
-        rule: "depth",
-        message: exercise.rules.depth.message,
-        speech: exercise.rules.depth.speech,
+        rule: depthRule?.id ?? "depth",
+        severity: depthRule?.severity ?? "major",
+        message: depthRule?.message,
+        speech: depthRule?.speech ?? depthRule?.message,
       });
     }
     // attemptBelow'un üstünde kalan ufak diz bükmeleri sessizce yok sayılır.
@@ -74,7 +91,7 @@ export function createRepEngine(exercise) {
     state.candidateFrames = 0;
 
     if (prev === "standing" && phase === "descent") {
-      state.attempt = { minKneeAngle: kneeAngle, torsoViolated: false };
+      state.attempt = { minKneeAngle: kneeAngle, violations: new Set() };
     }
 
     if (phase === "standing") {
@@ -84,14 +101,38 @@ export function createRepEngine(exercise) {
     events.push({ type: "phase", phase });
   }
 
+  function updateCalibration(metrics, landmarks) {
+    const calibSpec = exercise.calibration;
+    if (!calibSpec || state.calib.data) return;
+    if (!calibSpec.isStable(metrics)) return;
+
+    const sample = calibSpec.capture(landmarks);
+    if (!sample) return;
+
+    state.calib.samples.push(sample);
+    if (state.calib.samples.length >= calibSpec.minStableFrames) {
+      state.calib.data = calibSpec.finalize(state.calib.samples);
+      state.calib.samples = [];
+    }
+  }
+
   /**
    * Her frame'de çağrılır.
-   * @param {{kneeAngle:number, torsoTilt:number|null}|null} metrics
+   * @param {{landmarks:Array, worldLandmarks:Array|null}|null} frame
+   *   Filtrelenmiş landmark'lar (2D normalize + 3D world). Aktif kullanıcı yoksa null.
    * @param {number} timestamp performance.now()
    * @returns {Array} events: {type:"rep"|"warning"|"phase", ...}
    */
-  function step(metrics, timestamp) {
+  function step(frame, timestamp) {
     const events = [];
+
+    const metrics = frame
+      ? exercise.computeMetrics(
+          frame.landmarks,
+          frame.worldLandmarks ?? null,
+          state.calib.data
+        )
+      : null;
 
     if (!metrics) {
       state.metricsLostFrames += 1;
@@ -103,14 +144,16 @@ export function createRepEngine(exercise) {
         state.candidatePhase = null;
         state.candidateFrames = 0;
         state.attempt = null;
-        state.torsoBadFrames = 0;
+        ruleEngine.clearTransient();
         events.push({ type: "phase", phase: "idle" });
       }
       return events;
     }
 
     state.metricsLostFrames = 0;
-    const { kneeAngle, torsoTilt } = metrics;
+    const { kneeAngle } = metrics;
+
+    updateCalibration(metrics, frame.landmarks);
 
     // Deneme boyunca en derin nokta takip edilir.
     if (state.attempt) {
@@ -120,26 +163,23 @@ export function createRepEngine(exercise) {
       );
     }
 
-    // Gövde eğimi kuralı — yalnız aktif hareket fazlarında.
-    const torsoRule = exercise.rules.torso;
-    const inMotion =
-      state.confirmedPhase === "descent" ||
-      state.confirmedPhase === "bottom" ||
-      state.confirmedPhase === "ascent";
+    // Form kuralları — kural-bilinçsiz genel döngü.
+    const faultEvents = ruleEngine.step({
+      metrics,
+      landmarks: frame.landmarks,
+      phase: state.confirmedPhase,
+      timestamp,
+    });
 
-    if (inMotion && torsoTilt != null && torsoTilt > torsoRule.maxTiltDeg) {
-      state.torsoBadFrames += 1;
-      if (state.torsoBadFrames === torsoRule.minFrames) {
-        if (state.attempt) state.attempt.torsoViolated = true;
-        events.push({
-          type: "warning",
-          rule: "torso",
-          message: torsoRule.message,
-          speech: torsoRule.speech,
-        });
-      }
-    } else {
-      state.torsoBadFrames = 0;
+    for (const fault of faultEvents) {
+      if (state.attempt) state.attempt.violations.add(fault.rule);
+      events.push({
+        type: "warning",
+        rule: fault.rule,
+        severity: fault.severity,
+        message: fault.message,
+        speech: fault.speech,
+      });
     }
 
     // Faz adayı + confirm-frames debounce.
@@ -167,6 +207,7 @@ export function createRepEngine(exercise) {
 
   function reset() {
     state = freshState();
+    ruleEngine.reset();
   }
 
   function getState() {
@@ -175,8 +216,32 @@ export function createRepEngine(exercise) {
       repCount: state.repCount,
       faultyCount: state.faultyCount,
       lastRepAt: state.lastRepAt,
+      calibrated: Boolean(state.calib.data),
     };
   }
 
-  return { step, reset, getState };
+  /**
+   * Set özeti — kural başına ihlal sayısı; >%50 susturulan kurallar
+   * "değerlendirilemedi" (unevaluated) olarak işaretlenir. Sessiz PASS yok.
+   */
+  function getSummary() {
+    const rules = ruleEngine.getSummary();
+    if (depthRule) {
+      rules.unshift({
+        id: depthRule.id,
+        label: depthRule.label ?? depthRule.id,
+        severity: depthRule.severity ?? "major",
+        cameraHint: depthRule.cameraHint ?? "any",
+        fires: state.depthFires,
+        unevaluated: false, // attempt bazlı; frame susturması uygulanmaz
+      });
+    }
+    return {
+      repCount: state.repCount,
+      faultyCount: state.faultyCount,
+      rules,
+    };
+  }
+
+  return { step, reset, getState, getSummary };
 }

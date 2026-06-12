@@ -1,6 +1,6 @@
 // Tekrar sayacı hook'u — saf repEngine'i React'e bağlar.
 // usePoseTracking'in onFrame'inden processFrame ile beslenir.
-// Yeni set: reset() çağrılır (Başlat düğmesi).
+// Yeni set: reset() çağrılır (Başlat düğmesi); set bitişi: finishSet() özeti dondurur.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRepEngine } from "../lib/repEngine";
@@ -17,8 +17,9 @@ export function useRepCounter({ exercise, running, onEvent }) {
   const [phase, setPhase] = useState("idle");
   const [repCount, setRepCount] = useState(0);
   const [faultyCount, setFaultyCount] = useState(0);
-  const [warning, setWarning] = useState(null); // { message, at }
+  const [warning, setWarning] = useState(null); // { message, severity, at }
   const [repFlash, setRepFlash] = useState(0);
+  const [setSummary, setSetSummary] = useState(null); // engine.getSummary() — set bitişinde
 
   const lastRepAtRef = useRef(null);
   const onEventRef = useRef(onEvent);
@@ -43,6 +44,12 @@ export function useRepCounter({ exercise, running, onEvent }) {
     setRepCount(0);
     setFaultyCount(0);
     setWarning(null);
+    setSetSummary(null);
+  }, []);
+
+  /** Set bitişi: kural ihlal dağılımı + değerlendirilemeyen kurallar dondurulur. */
+  const finishSet = useCallback(() => {
+    setSetSummary(engineRef.current.getSummary());
   }, []);
 
   const processFrame = useCallback(
@@ -50,11 +57,14 @@ export function useRepCounter({ exercise, running, onEvent }) {
       const engine = engineRef.current;
       if (!engine || !running) return;
 
-      const metrics = activeTrack
-        ? exerciseRef.current.computeMetrics(activeTrack.landmarks)
+      const frame = activeTrack
+        ? {
+            landmarks: activeTrack.landmarks,
+            worldLandmarks: activeTrack.worldLandmarks ?? null,
+          }
         : null;
 
-      const events = engine.step(metrics, timestamp);
+      const events = engine.step(frame, timestamp);
 
       for (const event of events) {
         if (event.type === "phase") {
@@ -66,7 +76,11 @@ export function useRepCounter({ exercise, running, onEvent }) {
           setRepFlash((f) => f + 1);
         } else if (event.type === "warning") {
           setFaultyCount(engine.getState().faultyCount);
-          setWarning({ message: event.message, at: Date.now() });
+          setWarning({
+            message: event.message,
+            severity: event.severity ?? "major",
+            at: Date.now(),
+          });
         }
         onEventRef.current?.(event);
       }
@@ -83,10 +97,13 @@ export function useRepCounter({ exercise, running, onEvent }) {
   return {
     processFrame,
     reset,
+    finishSet,
     phase,
     repCount,
     faultyCount,
     warning: warning?.message ?? null,
+    warningSeverity: warning?.severity ?? null,
+    setSummary,
     repFlash,
     msSinceLastRep,
   };

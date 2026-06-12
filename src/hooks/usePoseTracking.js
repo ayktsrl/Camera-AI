@@ -13,6 +13,7 @@ import {
   updateTracks,
   selectActiveTrack,
 } from "../lib/tracking";
+import { createLandmarkSetFilter } from "../lib/oneEuro";
 import { drawPose, drawBoundingBox } from "../lib/drawing";
 
 export const STAGE_WIDTH = 960;
@@ -47,8 +48,23 @@ export function usePoseTracking({ videoRef, canvasRef, onFrame }) {
     let stream = null;
     let animationFrame = null;
     const trackerState = createTrackerState();
+    // Track başına One Euro filtre seti — 2D (çizim + topuk screen-y) ve
+    // 3D world (açı metrikleri) ayrı kanallar. Track düşünce silinir (reset).
+    const trackFilters = new Map();
     let lastActiveState = null;
     let lastCount = -1;
+
+    function getTrackFilters(trackId) {
+      let filters = trackFilters.get(trackId);
+      if (!filters) {
+        filters = {
+          screen: createLandmarkSetFilter(),
+          world: createLandmarkSetFilter(),
+        };
+        trackFilters.set(trackId, filters);
+      }
+      return filters;
+    }
 
     function processFrame() {
       const video = videoRef.current;
@@ -64,9 +80,10 @@ export function usePoseTracking({ videoRef, canvasRef, onFrame }) {
       const timestamp = performance.now();
       const result = landmarker.detectForVideo(video, timestamp);
       const allLandmarks = result.landmarks ?? [];
+      const allWorldLandmarks = result.worldLandmarks ?? [];
 
       const detections = allLandmarks
-        .map((landmarks) => {
+        .map((landmarks, poseIndex) => {
           if (countReliablePoints(landmarks) < MIN_RELIABLE_POINTS) return null;
 
           const bbox = getBBoxFromLandmarks(landmarks, isPointReliable);
@@ -74,6 +91,7 @@ export function usePoseTracking({ videoRef, canvasRef, onFrame }) {
 
           return {
             landmarks,
+            worldLandmarks: allWorldLandmarks[poseIndex] ?? null,
             centerNorm: {
               x: (bbox.minX + bbox.maxX) / 2,
               y: (bbox.minY + bbox.maxY) / 2,
@@ -84,6 +102,23 @@ export function usePoseTracking({ videoRef, canvasRef, onFrame }) {
         .filter(Boolean);
 
       const tracks = updateTracks(trackerState, detections);
+
+      // One Euro filtre — bu frame'de yeni örnek alan track'lere uygulanır;
+      // kaybolan track'lerin filtre state'i silinir (geri dönüşte sıçrama yok).
+      const timeSec = timestamp / 1000;
+      const liveIds = new Set();
+      for (const track of tracks) {
+        liveIds.add(track.id);
+        if (track.missingFrames > 0) continue; // yeni örnek yok — filtreleme yapma
+
+        const filters = getTrackFilters(track.id);
+        track.landmarks = filters.screen.apply(track.landmarks, timeSec);
+        track.worldLandmarks = filters.world.apply(track.worldLandmarks, timeSec);
+      }
+      for (const id of trackFilters.keys()) {
+        if (!liveIds.has(id)) trackFilters.delete(id);
+      }
+
       const confirmedTracks = tracks.filter((t) => t.isConfirmed);
       const activeTrack = selectActiveTrack(trackerState);
 
