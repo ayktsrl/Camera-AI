@@ -410,6 +410,449 @@ body,
   opacity: 0.85;
 }
 
+/* ---- Mod sekmeleri (Serbest / Program) ---- */
+
+.modes {
+  display: flex;
+  gap: 18px;
+  margin-top: 14px;
+}
+
+.mode {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0 0 3px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--faint);
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+  transition: color 140ms ease;
+}
+
+.mode:hover {
+  color: var(--muted);
+}
+
+.mode-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  cursor: default;
+}
+
+.mode:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- Program Modu ---- */
+
+.program {
+  min-height: 100vh;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 40px 28px 56px;
+  display: flex;
+  flex-direction: column;
+}
+
+.program-top {
+  display: flex;
+  align-items: baseline;
+  gap: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.program-brand {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.program-top .modes {
+  margin-top: 0;
+}
+
+.program-top-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 18px;
+}
+
+.program-progress {
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.program-kicker {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+.program-title {
+  margin: 0;
+  font-size: clamp(30px, 5vw, 42px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.program-note {
+  margin: 12px 0 0;
+  font-size: 14.5px;
+  color: var(--muted);
+}
+
+/* Gün seçimi — düz tipografik satırlar */
+.day-select {
+  margin-top: 48px;
+}
+
+.day-list {
+  list-style: none;
+  margin: 36px 0 0;
+  padding: 0;
+}
+
+.day-row {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--hairline);
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 20px 2px;
+  font-family: var(--font);
+  color: var(--paper);
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.day-row:hover {
+  background: var(--ink-raise);
+}
+
+.day-row:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.day-row-label {
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.day-row-meta {
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.day-next {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+.program-general {
+  margin: 28px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--faint);
+}
+
+/* Player — hareket ekranı */
+.player {
+  margin-top: 44px;
+  display: flex;
+  flex-direction: column;
+}
+
+.player-position {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+.player-exercise {
+  margin: 0;
+  font-size: clamp(28px, 4.6vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+}
+
+/* Hoca notu — ürünün ruhu bu satır: adın hemen altında, tırnak içinde */
+.coach-note {
+  margin: 14px 0 0;
+  font-size: clamp(17px, 2.6vw, 21px);
+  line-height: 1.45;
+  color: var(--paper);
+  border-left: 2px solid var(--accent);
+  padding-left: 14px;
+}
+
+.player-dose {
+  margin: 18px 0 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.player-links {
+  margin-top: 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+}
+
+.video-link {
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 2px;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.video-link:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Elle tekrar girişi */
+.rep-input-row {
+  margin-top: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 200px;
+}
+
+.rep-input {
+  appearance: textfield;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--ink-raise);
+  color: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 0;
+  font-family: var(--font);
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rep-input:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Süre dozu (stretch / jumping jack) */
+.hold-timer {
+  margin-top: 36px;
+}
+
+.hold-timer-count {
+  font-size: clamp(72px, 16vw, 128px);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hold-timer-start {
+  padding: 14px 22px;
+}
+
+/* Büyük dokunmatik set bitirme */
+.set-done {
+  margin-top: 36px;
+  width: 100%;
+  padding: 22px 16px;
+  font-size: 16px;
+}
+
+.untrackable-note {
+  margin: 20px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--faint);
+}
+
+/* Pose set ekranı — sahne + alt panel */
+.player--pose {
+  margin-top: 28px;
+}
+
+.player-stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  min-height: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+.player-stage .stage-count {
+  font-size: clamp(72px, 14vh, 140px);
+  top: 6px;
+  left: 20px;
+}
+
+.player-pose-panel {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.player-pose-panel .player-exercise {
+  font-size: clamp(22px, 3.4vw, 30px);
+}
+
+.player-pose-panel .coach-note {
+  font-size: clamp(15px, 2.2vw, 18px);
+}
+
+/* Dinlenme ekranı */
+.rest {
+  align-items: center;
+  text-align: center;
+  margin-top: 64px;
+}
+
+.rest-count {
+  font-size: clamp(120px, 28vh, 240px);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+}
+
+.rest-next {
+  margin: 24px 0 0;
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.rest-next strong {
+  color: var(--paper);
+  font-weight: 600;
+}
+
+.rest-actions {
+  margin-top: 40px;
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  max-width: 360px;
+}
+
+/* Gün özeti */
+.day-summary {
+  margin-top: 48px;
+}
+
+.summary-exercises {
+  list-style: none;
+  margin: 32px 0 0;
+  padding: 0;
+}
+
+.summary-exercise {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.summary-ex-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.summary-ex-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.summary-ex-sets {
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-ex-reps {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-ex-form {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.summary-ex-form .summary-faults {
+  margin-top: 4px;
+}
+
+.summary-reminders {
+  margin: 32px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--hairline);
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.summary-reminders p {
+  margin: 0;
+}
+
+@media (max-width: 880px) {
+  .program {
+    padding: 24px 18px 40px;
+  }
+
+  .program-top {
+    flex-wrap: wrap;
+    gap: 14px 22px;
+  }
+
+  .program-top-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .rest {
+    margin-top: 40px;
+  }
+}
+
 /* ---- Mobil ---- */
 
 @media (max-width: 880px) {

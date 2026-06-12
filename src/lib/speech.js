@@ -55,6 +55,15 @@ export function createCoach({ lang = "tr-TR" } = {}) {
     speak(String(count), { interrupt: true });
   }
 
+  /**
+   * Cooldown'suz anons — akış konuşmaları için (hoca notu set başında bir kez,
+   * dinlenme sonu "Başla"). Tekrar kontrolü çağıran taraftadır.
+   */
+  function announce(text, { interrupt = false } = {}) {
+    if (!enabled || !supported || !text) return;
+    speak(text, { interrupt });
+  }
+
   function setEnabled(value) {
     enabled = value;
     if (!value && supported) window.speechSynthesis.cancel();
@@ -63,6 +72,7 @@ export function createCoach({ lang = "tr-TR" } = {}) {
   return {
     say,
     sayCount,
+    announce,
     setEnabled,
     isSupported: supported,
   };
