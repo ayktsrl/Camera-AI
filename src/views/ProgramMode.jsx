@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { ownerProgram } from "../programs/default-program";
+import { calisthenicsProgram } from "../programs/calisthenics-program";
 import {
   createWorkoutSession,
   isPoseTracked,
@@ -276,6 +277,43 @@ export default function ProgramMode({ onExit }) {
           {ownerProgram.generalRules.plank.perWeek} gün, kardiyo sonrası{" "}
           {ownerProgram.generalRules.plank.sets} set max
         </p>
+
+        {/* Kalistenik program — PM tasarımı, owner programının yanında ayrı nesne.
+            Ekipmansız 3 günlük tam-vücut. startDay'e program geçilir (geçmiş/sırada
+            owner'a özgü kalır — burada zorlamasız). */}
+        <div className="custom-section">
+          <p className="program-kicker custom-kicker">{calisthenicsProgram.name}</p>
+          <p className="program-note">
+            Ekipmansız, gün aşırı 3 gün. Takipli hareketler canlı form verir,
+            rehberli hareketler set/tekrar sayar + sesli yönlendirir.
+          </p>
+          <ul className="day-list">
+            {calisthenicsProgram.days.map((day) => (
+              <li key={day.id}>
+                <button
+                  type="button"
+                  className="day-row"
+                  onClick={() => startDay(day.id, calisthenicsProgram)}
+                >
+                  <span className="day-row-head">
+                    <span className="day-row-label">{day.label}</span>
+                    <span className="day-row-meta">
+                      {day.suggestedDay} · {countDayExercises(day)} hareket · ~
+                      {estimateDayMinutes(day)} dk
+                    </span>
+                  </span>
+                  <span className="day-preview-strip" aria-hidden="true">
+                    {dayPreviewExercises(day)
+                      .slice(0, PREVIEW_STRIP_MAX)
+                      .map((ex) => (
+                        <ExercisePreview key={ex.id} exercise={ex} size="strip" />
+                      ))}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
 
         {/* Özel programlar — kullanıcının kendi kurdukları */}
         <div className="custom-section">

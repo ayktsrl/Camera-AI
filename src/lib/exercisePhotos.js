@@ -30,6 +30,14 @@ const PHOTO_KEYS = new Set([
   "jumpingJack",
   "lunge",
   "kneeRaise",
+  // Kalistenik rehberli hareketler (free-exercise-db, Unlicense — bundle'lı):
+  "glute-bridge",
+  "mountain-climber",
+  "leg-raise",
+  "dips",
+  "inverted-row",
+  "calf-raise",
+  "arm-circles",
 ]);
 
 // ruleSetRef (camelCase egzersiz kural-seti anahtarı) → foto klasörü.
@@ -60,6 +68,14 @@ const ID_TO_KEY = {
   "db-shoulder-press": "shoulderPress",
   "db-lateral-raise": "lateralRaise",
   "db-hammer-curl": "hammerCurl",
+  // Kalistenik rehberli — library id'leri foto klasörüyle birebir:
+  "glute-bridge": "glute-bridge",
+  "mountain-climber": "mountain-climber",
+  "leg-raise": "leg-raise",
+  dips: "dips",
+  "inverted-row": "inverted-row",
+  "calf-raise": "calf-raise",
+  "arm-circles": "arm-circles",
 };
 
 /**
@@ -77,9 +93,19 @@ export function photoKeyFor(exercise) {
   const id = exercise?.id || "";
   // Tam id eşleşmesi
   if (ID_TO_KEY[id]) return ID_TO_KEY[id];
-  // Kök eşleşmesi: özel programda hareket id'si "lunge-2" gibi köklenebilir.
-  for (const baseId of Object.keys(ID_TO_KEY)) {
-    if (id === baseId || id.startsWith(`${baseId}-`)) return ID_TO_KEY[baseId];
+  // Kök eşleşmesi: özel programda hareket id'si "lunge-2" gibi köklenebilir;
+  // kalistenik programda ise "cxA-glute-bridge" gibi bir gün önekiyle gelir.
+  // Bu yüzden hem sonek ("base-…") hem önek ("…-base") hem de tek-segment
+  // ortası eşleşmesini deniyoruz (en uzun base önce → "leg-raise" "raise"den önce).
+  const bases = Object.keys(ID_TO_KEY).sort((a, b) => b.length - a.length);
+  for (const baseId of bases) {
+    if (
+      id === baseId ||
+      id.startsWith(`${baseId}-`) ||
+      id.endsWith(`-${baseId}`)
+    ) {
+      return ID_TO_KEY[baseId];
+    }
   }
   return null;
 }

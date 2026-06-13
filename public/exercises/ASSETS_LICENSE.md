@@ -28,6 +28,17 @@ Her hareket klasöründe iki kare bulunur:
 | `jumpingJack`                           | `Star_Jump`                     |
 | `lunge`                                 | `Bodyweight_Walking_Lunge`      |
 | `kneeRaise`                             | `Step-up_with_Knee_Raise`       |
+| `glute-bridge`                          | `Single_Leg_Glute_Bridge`       |
+| `mountain-climber`                      | `Mountain_Climbers`             |
+| `leg-raise`                             | `Flat_Bench_Lying_Leg_Raise`    |
+| `dips`                                  | `Bench_Dips`                    |
+| `inverted-row`                          | `Inverted_Row`                  |
+| `calf-raise`                            | `Standing_Calf_Raises`          |
+| `arm-circles`                           | `Arm_Circles`                   |
+
+Kalistenik rehberli hareketler (PM programı 2026-06-13) için 7 yeni klasör eklendi.
+Fotosu bulunamayanlar (Pike Push-Up, Hollow Hold, High Knees, Leg Swings) nötr
+placeholder'a düşer — çöp adam DEĞİL.
 
 Tüm görseller ~850x567 px, JPEG, toplam ~1 MB.
 
