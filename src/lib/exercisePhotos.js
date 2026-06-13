@@ -53,6 +53,9 @@ const REF_TO_KEY = {
   lateralRaise: "lateralRaise",
   hammerCurl: "hammerCurl",
   shoulderPress: "shoulderPress",
+  // Batch 2 takipli: mountain climber foto bundle'ı mevcut (free-exercise-db).
+  // hollowHold bundle YOK → eşleme eklenmez, placeholder'a düşer.
+  mountainClimber: "mountain-climber",
 };
 
 // Library id (özel programda hareket id kökü) → foto klasörü.

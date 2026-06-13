@@ -83,18 +83,20 @@ describe("kalistenik program — şema bütünlüğü", () => {
 });
 
 describe("kalistenik program — takipli vs rehberli dağılım", () => {
-  // Batch 1: glute bridge + leg raise yeni motorlarla, high knees kneeRaise'i paylaşır →
-  // takipli ruleSetRef kümesi 6'dan 8'e çıktı (gluteBridge, legRaise eklendi).
-  it("takipli motorlar mevcut pose-rulesetleri (Batch 1 dahil)", () => {
+  // Batch 1: glute bridge + leg raise + high knees(kneeRaise) → 8 ref.
+  // Batch 2: mountain climber (mountainClimber) + hollow hold (hollowHold, izometrik) → 10 ref.
+  it("takipli motorlar mevcut pose-rulesetleri (Batch 1+2 dahil)", () => {
     const tracked = allExercises().filter((e) => isPoseTracked(e));
     const refs = new Set(tracked.map((e) => e.ruleSetRef));
     expect([...refs].sort()).toEqual(
       [
         "gluteBridge",
+        "hollowHold",
         "jumpingJack",
         "kneeRaise",
         "legRaise",
         "lunge",
+        "mountainClimber",
         "plank",
         "pushup",
         "squat",
@@ -102,26 +104,30 @@ describe("kalistenik program — takipli vs rehberli dağılım", () => {
     );
   });
 
-  it("rehberli hareketlerde benzersiz hareket adları (Batch 1 sonrası kalanlar)", () => {
+  it("rehberli hareketlerde benzersiz hareket adları (Batch 2 sonrası kalanlar)", () => {
     const guided = allExercises().filter((e) => !e.trackable);
     const names = new Set(guided.map((e) => e.name));
-    // Batch 1'de glute bridge / leg raise / high knees TAKİPLİ oldu → guided'dan çıktı.
-    // Kalan rehberliler: mountain climber, dips, masa-row, pike push-up, hollow hold,
-    // calf raise, arm circles (+ leg swings ısınma).
-    expect(names.size).toBeGreaterThanOrEqual(7);
+    // Batch 2'de mountain climber + hollow hold TAKİPLİ oldu → guided'dan çıktı.
+    // Kalan rehberliler: dips, masa-row, pike push-up, calf raise, arm circles
+    // (+ leg swings ısınma).
+    expect(names.size).toBeGreaterThanOrEqual(5);
     for (const want of [
-      "Mountain Climber",
       "Dips",
       "Masa/Bar Row",
       "Pike Push-Up",
-      "Hollow Hold",
       "Calf Raise",
       "Arm Circles",
     ]) {
       expect(names.has(want)).toBe(true);
     }
-    // Batch 1 takipli oldu → artık rehberli DEĞİL:
-    for (const tracked of ["Glute Bridge", "Leg Raise", "High Knees"]) {
+    // Batch 1+2 takipli oldu → artık rehberli DEĞİL:
+    for (const tracked of [
+      "Glute Bridge",
+      "Leg Raise",
+      "High Knees",
+      "Mountain Climber",
+      "Hollow Hold",
+    ]) {
       expect(names.has(tracked)).toBe(false);
     }
   });
@@ -149,7 +155,7 @@ describe("kalistenik program — player tüketimi", () => {
     }
   });
 
-  it("takipli 6 hareket pose moduna, rehberli hepsi guided'a girer", () => {
+  it("takipli hareketler pose moduna, rehberli hepsi guided'a girer", () => {
     for (const ex of allExercises()) {
       const poseReady =
         isPoseTracked(ex) && EXERCISES.some((e) => e.id === ex.ruleSetRef);

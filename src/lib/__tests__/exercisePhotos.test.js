@@ -66,11 +66,20 @@ describe("exercisePhotos — graceful fallback (çöp adam DEĞİL)", () => {
 });
 
 describe("exercisePhotos — kütüphane bütünlüğü", () => {
-  it("takipli (trackable + ruleSetRef) her hareketin fotoğrafı vardır", () => {
+  // Batch 2: hollow hold takipli oldu ama foto bundle'ı YOK (free-exercise-db'de yok) →
+  // bilinçli placeholder'a düşer (prompt: "hollow-hold yoksa placeholder"). Bu hareket
+  // dışında her takiplinin gerçek fotosu olmalı.
+  const NO_PHOTO_TRACKED = new Set(["hollowHold"]);
+
+  it("takipli (trackable + ruleSetRef) hareketlerin fotoğrafı vardır (placeholder istisnası dışında)", () => {
     const tracked = EXERCISE_LIBRARY.filter((e) => e.trackable && e.ruleSetRef);
     expect(tracked.length).toBeGreaterThan(0);
     for (const ex of tracked) {
-      expect(hasPhotos(ex)).toBe(true);
+      if (NO_PHOTO_TRACKED.has(ex.ruleSetRef)) {
+        expect(hasPhotos(ex)).toBe(false);
+      } else {
+        expect(hasPhotos(ex)).toBe(true);
+      }
     }
   });
 });

@@ -12,6 +12,8 @@ import { shoulderPress } from "./shoulderPress";
 import { plank } from "./plank";
 import { gluteBridge } from "./gluteBridge";
 import { legRaise } from "./legRaise";
+import { mountainClimber } from "./mountainClimber";
+import { hollowHold } from "./hollowHold";
 
 export const EXERCISES = [
   squat,
@@ -25,6 +27,8 @@ export const EXERCISES = [
   plank,
   gluteBridge,
   legRaise,
+  mountainClimber,
+  hollowHold,
 ];
 
 export function getExercise(id) {

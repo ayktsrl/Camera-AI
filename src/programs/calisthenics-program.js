@@ -12,9 +12,11 @@
 // serbest yazılabilir (PM devir notu §5). Sesli okunur (set başında bir kez).
 //
 // TAKİPLİ (✅ P0): squat / pushup / lunge / plank / jumpingJack / kneeRaise +
-//   Batch 1: gluteBridge / legRaise / highKnees(kneeRaise motorunu paylaşır).
+//   Batch 1: gluteBridge / legRaise / highKnees(kneeRaise motorunu paylaşır) +
+//   Batch 2: mountainClimber (REP, activeSide) / hollowHold (İZOMETRİK, plank holdEngine).
 //   trackable:true, trackingPhase:"P0", ruleSetRef:"<key>", untrackableReason:null
-//   → Batch 2 dersi: P0 olmazsa canlıda saymaz. Hepsi P0.
+//   → P0 olmazsa canlıda saymaz. Hepsi P0. Batch 2 ile takip-edilebilir hareketlerin
+//     TAMAMI eklendi; kalan rehberliler tek-kamera/öklüzyon sınırı.
 // REHBERLİ (🔶): trackable:false, trackingPhase:null, ruleSetRef:null,
 //   untrackableReason:"<spec gerekçesi>" + coachNote (form ipucu).
 
@@ -46,20 +48,17 @@ function plankFinisher(suffix) {
 // Rehberli hareketlerin "neden takip edilemez" gerekçeleri — spec §3 tablosundan birebir.
 // NOT (Batch 1): glute-bridge / leg-raise / high-knees artık TAKİPLİ (✅ P0) —
 // yeni gluteBridge/legRaise motorları + highKnees kneeRaise motorunu paylaşır.
-// Eski "untrackable" gerekçeleri kaldırıldı (artık takip ediliyorlar).
+// NOT (Batch 2): mountain-climber (mountainClimber motoru) + hollow-hold (hollowHold,
+// plank holdEngine) de TAKİPLİ oldu → eski "untrackable" gerekçeleri kaldırıldı.
 const REASON = {
   armCircles:
     "Serbest savurma — form kuralı anlamlı değil, sayım değeri düşük.",
   pikePushup:
     "Push-up motoru yatay dirsek yörüngesi bekler; pike'ta gövde V şeklinde, kalça yüksekte — mevcut pushup ruleset'i yanlış sayar.",
-  mountainClimber:
-    "Plank pozisyonunda hızlı asimetrik diz çekme; mevcut motorlar simetrik/yavaş tempo için kalibre, hız sayım gürültüsü yaratır.",
   invertedRow:
     "Gövde yatay askıda; masa/bar kol+gövde örtüşmesi dirsek yörüngesini gizler (default-program'daki tüm row'lar da aynı gerekçeyle rehberli).",
   dips:
     "Eller arkada, gövde önde; sandalye/masa kenarı kameradan ele/omuza öklüzyon yaratır, dirsek yörüngesi gizlenir.",
-  hollowHold:
-    "Sırtüstü izometrik; plank holdEngine yere-paralel/yüzükoyun için, hollow farklı supine geometri — ayrı motor gerekir.",
   calfRaise:
     "Genlik çok küçük (ayak bileği), pose gürültü bandının altında.",
   legSwings:
@@ -147,7 +146,7 @@ export const calisthenicsProgram = {
           type: "straight",
           label: "Core",
           exercises: [
-            guided("cxA-mountain-climber", "Mountain Climber", { type: "time", seconds: 30 }, REASON.mountainClimber, "Kalça yukarı zıplamasın, plank hattını koru, tempo sabit", { sets: 3, restSec: [45, 60] }),
+            tracked("cxA-mountain-climber", "Mountain Climber", { type: "time", seconds: 30 }, "mountainClimber", "Kalça yukarı zıplamasın, plank hattını koru, tempo sabit", { sets: 3, restSec: [45, 60] }),
           ],
         },
         plankFinisher("a"),
@@ -187,7 +186,7 @@ export const calisthenicsProgram = {
           label: "Core",
           exercises: [
             tracked("cxB-leg-raise", "Leg Raise", { type: "repRange", min: 10, max: 12 }, "legRaise", "Bel yerden kalkmasın, bacakları kontrollü indir", { sets: 3, restSec: [45, 60] }),
-            guided("cxB-hollow-hold", "Hollow Hold", { type: "time", seconds: 25 }, REASON.hollowHold, "Bel yere yapışık, omuzlar ve bacaklar hafif yerden", { sets: 2, restSec: [45, 60] }),
+            tracked("cxB-hollow-hold", "Hollow Hold", { type: "hold" }, "hollowHold", "Bel yere yapışık, omuzlar ve bacaklar hafif yerden", { sets: 2, restSec: [45, 60] }),
           ],
         },
         plankFinisher("b"),
@@ -227,7 +226,7 @@ export const calisthenicsProgram = {
           type: "straight",
           label: "Core",
           exercises: [
-            guided("cxC-mountain-climber", "Mountain Climber", { type: "time", seconds: 30 }, REASON.mountainClimber, "Kalça yukarı zıplamasın, plank hattını koru, tempo sabit", { sets: 3, restSec: [45, 60] }),
+            tracked("cxC-mountain-climber", "Mountain Climber", { type: "time", seconds: 30 }, "mountainClimber", "Kalça yukarı zıplamasın, plank hattını koru, tempo sabit", { sets: 3, restSec: [45, 60] }),
           ],
         },
         plankFinisher("c"),

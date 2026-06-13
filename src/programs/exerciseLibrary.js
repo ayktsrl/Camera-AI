@@ -4,6 +4,12 @@
 // Her kayıt, owner hoca programındaki (src/programs/default-program.js) hareketlerden
 // + temel bodyweight hareketlerden türetilmiştir.
 //
+// Batch 2 (kalistenik gerçek-takip tamamlandı): mountain climber (REP, ruleSetRef
+// "mountainClimber", activeSide deseni) + hollow hold (İZOMETRİK, ruleSetRef
+// "hollowHold", plank holdEngine'i kullanır) artık CANLI P0. Bununla kalistenik
+// programındaki tüm takip-edilebilir hareketler eklendi; kalan rehberliler
+// (dips/row/pike/calf/arm circles) tek-kamera / öklüzyon sınırı nedeniyle rehberli.
+//
 // SINIR: trackable === true olanlar pose form analizine GİRER (kameradan otomatik
 // tekrar sayımı). Şu an squat ailesi (ruleSetRef "squat"), push-up
 // (ruleSetRef "pushup"), lunge (ruleSetRef "lunge"), jumping jack
@@ -108,12 +114,12 @@ export const EXERCISE_LIBRARY = [
     id: "mountain-climber",
     name: "Mountain Climber",
     type: "bodyweight",
-    trackable: false,
-    trackingPhase: null,
-    ruleSetRef: null,
+    trackable: true,
+    trackingPhase: "P0",
+    ruleSetRef: "mountainClimber",
     defaultDose: { type: "time", seconds: 30 },
     coachNote: "Kalça yukarı zıplamasın, plank hattını koru, tempo sabit",
-    untrackableReason: "Plank pozisyonunda hızlı asimetrik diz çekme; mevcut motorlar simetrik/yavaş tempo için kalibre, hız sayım gürültüsü yaratır.",
+    untrackableReason: null,
   },
   {
     id: "glute-bridge",
@@ -174,12 +180,14 @@ export const EXERCISE_LIBRARY = [
     id: "hollow-hold",
     name: "Hollow Hold",
     type: "bodyweight",
-    trackable: false,
-    trackingPhase: null,
-    ruleSetRef: null,
-    defaultDose: { type: "time", seconds: 25 },
+    trackable: true,
+    trackingPhase: "P0",
+    ruleSetRef: "hollowHold",
+    // İzometrik tutuş — plank gibi holdEngine yolundan geçer (dose.type "hold" →
+    // PoseHoldScreen). Sabit hedef yok ("durabildiğin kadar"); süre kaydedilir.
+    defaultDose: { type: "hold" },
     coachNote: "Bel yere yapışık, omuzlar ve bacaklar hafif yerden",
-    untrackableReason: "Sırtüstü izometrik; plank holdEngine yere-paralel/yüzükoyun için, hollow farklı supine geometri — ayrı motor gerekir.",
+    untrackableReason: null,
   },
   {
     id: "calf-raise",

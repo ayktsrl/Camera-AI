@@ -161,6 +161,38 @@ export const DEFAULT_TUNINGS = {
       hipPike: { threshold: 160, tolerance: 4 },
     },
   },
+
+  // Mountain Climber — REP, primaryMetric = aktif (daha bükük) bacağın kalça fleksiyonu
+  // (kneeRaise yönü, çevirme yok). Bacak geride ~160–175 → "standing"; diz göğüste ~90 → "bottom".
+  // phaseConfirmFrames düşük (3) — hızlı tempo. hipPike: plank-hattı pike kuralı (anlık),
+  // bodyLinePike uzayında (kalça yukarı + açı <eşik = pike; ters yön → 180, kural susar).
+  mountainClimber: {
+    phases: { standingMin: 155, bottomMax: 100 },
+    attemptBelow: 135,
+    phaseConfirmFrames: 3,
+    faults: {
+      hipPike: { threshold: 156, tolerance: 4 },
+    },
+  },
+
+  // Hollow Hold — İZOMETRİK (holdEngine, plank deseni). holdEngine değeri = bodyLineAngle =
+  // (180 - hamHipAngle): derin kaşık → YÜKSEK değer (gluteBridge yön çevirme tekniği).
+  //   düz yatış (ham ~178) → bodyLineAngle ~2; derin hollow (ham ~130) → ~50.
+  // horizontalMinTilt = giriş kapısı (kaba "kaşık başladı"); straightEnter = geçerli hold
+  // kalitesi; straightExit = histerezis (altına düşünce broken → timer durur).
+  hollowHold: {
+    hold: {
+      horizontalMinTilt: 20, // ham açı ≲160 → belirgin kaşık girişi
+      straightEnter: 30, // ham açı ≲150 → geçerli hollow (timer akar)
+      straightExit: 22, // ham açı ≳158 → kaşık bozuldu (timer durur)
+      enterFrames: 4,
+      breakEndMs: 6000,
+    },
+    faults: {
+      // holding fazında bodyLineAngle <eşik = kaşık zayıfladı (omuz/bacak düşüyor).
+      backDrop: { threshold: 28, tolerance: 2 },
+    },
+  },
 };
 
 // Slider sınırları + adım — kalibrasyon modu UI bunları okur. Her eşik için makul

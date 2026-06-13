@@ -57,9 +57,10 @@ describe("buildCustomProgram — şema geçerliliği", () => {
   });
 
   it("rehberli hareket untrackableReason taşır, ruleSetRef null", () => {
-    // mountain-climber rehberli (plank artık Batch 4'te takipli oldu).
+    // pike-pushup rehberli (Batch 2'de mountain-climber + hollow-hold takipli oldu;
+    // pike push-up tek-kamera/yörünge sınırı nedeniyle hâlâ rehberli).
     const program = buildCustomProgram({
-      items: [{ libraryId: "mountain-climber", sets: 3 }],
+      items: [{ libraryId: "pike-pushup", sets: 3 }],
     });
     const ex = program.days[0].blocks[0].exercises[0];
     expect(ex.trackable).toBe(false);
