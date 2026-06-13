@@ -42,11 +42,22 @@ describe("exerciseLibrary — şema bütünlüğü", () => {
     }
   });
 
-  it("takipli hareketler yalnız kayıtlı motorlara bağlı (squat/pushup/lunge + jumpingJack/kneeRaise hepsi P0)", () => {
+  it("takipli hareketler yalnız kayıtlı motorlara bağlı (squat/pushup/lunge + jumpingJack/kneeRaise + Batch 3 dumbbell hepsi P0)", () => {
     const tracked = EXERCISE_LIBRARY.filter((e) => e.trackable);
     expect(tracked.length).toBeGreaterThanOrEqual(5);
-    const allowed = ["squat", "pushup", "lunge", "jumpingJack", "kneeRaise"];
+    const allowed = [
+      "squat",
+      "pushup",
+      "lunge",
+      "jumpingJack",
+      "kneeRaise",
+      "lateralRaise",
+      "hammerCurl",
+      "shoulderPress",
+    ];
     expect(tracked.every((e) => allowed.includes(e.ruleSetRef))).toBe(true);
+    // Batch 2 aktivasyon dersi: takipli her hareket P0 (canlıda sayar).
+    expect(tracked.every((e) => e.trackingPhase === "P0")).toBe(true);
     // P0 çekirdek: push-up, squat ailesi, lunge takipli olmalı
     expect(tracked.some((e) => e.ruleSetRef === "pushup")).toBe(true);
     expect(tracked.some((e) => e.ruleSetRef === "squat")).toBe(true);
@@ -54,6 +65,10 @@ describe("exerciseLibrary — şema bütünlüğü", () => {
     // P0 ısınma (Batch 2 aktivasyon): jumping jack + standing knee raise canlı takipli
     expect(tracked.some((e) => e.ruleSetRef === "jumpingJack")).toBe(true);
     expect(tracked.some((e) => e.ruleSetRef === "kneeRaise")).toBe(true);
+    // Batch 3 dumbbell: lateral raise + hammer curl + shoulder press canlı P0
+    expect(tracked.some((e) => e.ruleSetRef === "lateralRaise")).toBe(true);
+    expect(tracked.some((e) => e.ruleSetRef === "hammerCurl")).toBe(true);
+    expect(tracked.some((e) => e.ruleSetRef === "shoulderPress")).toBe(true);
   });
 });
 

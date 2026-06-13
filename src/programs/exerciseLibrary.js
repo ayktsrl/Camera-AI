@@ -7,9 +7,10 @@
 // SINIR: trackable === true olanlar pose form analizine GİRER (kameradan otomatik
 // tekrar sayımı). Şu an squat ailesi (ruleSetRef "squat"), push-up
 // (ruleSetRef "pushup"), lunge (ruleSetRef "lunge"), jumping jack
-// (ruleSetRef "jumpingJack") ve standing knee raise (ruleSetRef "kneeRaise")
-// hepsi P0'da CANLI pose-takiplidir. lateralRaise / hammerCurl P2'de bekliyor
-// (motorları Batch 3'te gelecek, henüz canlı değil).
+// (ruleSetRef "jumpingJack"), standing knee raise (ruleSetRef "kneeRaise") +
+// Batch 3 dumbbell hareketleri lateral raise (ruleSetRef "lateralRaise"),
+// hammer curl (ruleSetRef "hammerCurl") ve shoulder press (ruleSetRef "shoulderPress")
+// hepsi P0'da CANLI pose-takiplidir.
 // Diğer her şey "rehberli": kullanıcı kendi sayar, uyarı + önizleme verilir.
 // (Faz mantığı programPlayer.isPoseTracked ile aynı: trackable && ruleSetRef &&
 //  trackingPhase <= ACTIVE_TRACKING_PHASE.)
@@ -174,34 +175,34 @@ export const EXERCISE_LIBRARY = [
     id: "db-shoulder-press",
     name: "Dumbbell Shoulder Press",
     type: "dumbbell",
-    trackable: false,
-    trackingPhase: null,
-    ruleSetRef: null,
+    trackable: true,
+    trackingPhase: "P0",
+    ruleSetRef: "shoulderPress",
     defaultDose: { type: "reps", value: 12 },
-    coachNote: "Bel kavislenmesin, çekirdek sık",
-    untrackableReason: "Baş üstü kol hareketi — kol/baş örtüşmesi pose güvenini düşürür.",
+    coachNote: "Dirsekleri çok açma biraz öne al, bel kavislenmesin",
+    untrackableReason: null,
   },
   {
     id: "db-lateral-raise",
     name: "Dumbbell Lateral Raise",
     type: "dumbbell",
-    trackable: false,
-    trackingPhase: null,
-    ruleSetRef: null,
+    trackable: true,
+    trackingPhase: "P0",
+    ruleSetRef: "lateralRaise",
     defaultDose: { type: "reps", value: 15 },
     coachNote: "Omuz hizasında dur, trapezi kasma",
-    untrackableReason: "Düşük genlikli yan kol kaldırma — pose gürültü bandının içinde.",
+    untrackableReason: null,
   },
   {
     id: "db-hammer-curl",
     name: "Dumbbell Hammer Curl",
     type: "dumbbell",
-    trackable: false,
-    trackingPhase: null,
-    ruleSetRef: null,
+    trackable: true,
+    trackingPhase: "P0",
+    ruleSetRef: "hammerCurl",
     defaultDose: { type: "reps", value: 12 },
-    coachNote: "Dirsek sabit, gövde sallanmasın",
-    untrackableReason: "Bilek/önkol detayı landmark çözünürlüğünün altında.",
+    coachNote: "Dirsek sabit, gövde sallanmasın, üstte 1sn sık",
+    untrackableReason: null,
   },
 
   // Barbell

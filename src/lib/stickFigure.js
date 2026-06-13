@@ -200,6 +200,21 @@ export const KEYFRAMES = {
     },
   ],
 
+  // Shoulder press — önden: eller omuzda (dirsek bükük, bilek omuz hizası) →
+  // yukarı uzat (kol dikel, bilek baş üstü).
+  "db-shoulder-press": [
+    {
+      ...STAND,
+      elbow: [64, 30],
+      wrist: [60, 24],
+    },
+    {
+      ...STAND,
+      elbow: [56, 14],
+      wrist: [54, 4],
+    },
+  ],
+
   // Generic — nötr "egzersiz": kol hafif iner-kalkar (takip-edilemez hareketler).
   generic: [
     {
@@ -226,12 +241,24 @@ export function keyframeKeyFor(exercise) {
   if (ref && KEYFRAMES[ref]) return ref;
 
   // ruleSetRef (camelCase egzersiz id'si) → keyframe anahtarı (kebab-case) eşlemesi.
-  const REF_TO_KEY = { jumpingJack: "jumping-jack", kneeRaise: "knee-raise" };
+  const REF_TO_KEY = {
+    jumpingJack: "jumping-jack",
+    kneeRaise: "knee-raise",
+    lateralRaise: "db-lateral-raise",
+    hammerCurl: "db-hammer-curl",
+    shoulderPress: "db-shoulder-press",
+  };
   if (ref && REF_TO_KEY[ref]) return REF_TO_KEY[ref];
 
   // library id eşlemesi (özel programdaki hareket id'si kökü "lunge-2" gibi olabilir)
   const id = exercise?.id || "";
-  for (const key of ["jumping-jack", "knee-raise", "db-lateral-raise", "db-hammer-curl"]) {
+  for (const key of [
+    "jumping-jack",
+    "knee-raise",
+    "db-lateral-raise",
+    "db-hammer-curl",
+    "db-shoulder-press",
+  ]) {
     if (id === key || id.startsWith(`${key}-`)) return key;
   }
   // "standing-knee-raise" id'si → knee-raise keyframe'i.

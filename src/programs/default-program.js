@@ -53,13 +53,17 @@ export const ownerProgram = {
             coachNote: "Lunge'da diz asla öne fırlamasın, gövde hafif öne eğilsin",
             videoUrl: "https://www.youtube.com/watch?v=Tc-9yvl5Zt8", embeddable: false,
             sets: 4, dose: { type: "reps", value: 12 },
-            // Lunge yarısı pose-takipli (ruleSetRef "lunge"); lateral kolu P2.
+            // Combo: tek FSM bir ana hareket sayar → LUNGE sayılır (alt-gövde genliği
+            // daha güvenilir); lateral kol ikincil (çift sayım riski yok). lateralRaise
+            // motoru ayrıca kütüphanede tek başına takipli (Batch 3 P0).
             trackable: true, trackingPhase: "P0", ruleSetRef: "lunge", untrackableReason: null },
           { id: "squat-press", name: "Squat + Shoulder Dumbbell Press",
             coachNote: "Press'te dirsekleri çok açma, biraz öne al",
             videoUrl: "https://www.youtube.com/watch?v=0RAzZhXnsww", embeddable: false,
             sets: 4, dose: { type: "reps", value: 12 },
-            // squat yarısı mevcut motorla; press kolu P2 → "squatPress"
+            // Combo: tek FSM bir ana hareket sayar → SQUAT sayılır (alt-gövde genliği
+            // press kolundan güvenilir); press ikincil. shoulderPress motoru ayrıca
+            // kütüphanede tek başına takipli (Batch 3 P0).
             trackable: true, trackingPhase: "P0", ruleSetRef: "squat",
             untrackableReason: null },
           { id: "push-up", name: "Push Up",
@@ -201,14 +205,14 @@ export const ownerProgram = {
           { id: "light-db-lateral", name: "Light DB Lateral Raise", coachNote: null,
             videoUrl: "https://www.youtube.com/watch?v=ureBK3Q0uEM", embeddable: true,
             sets: 1, dose: { type: "reps", value: 15 },
-            trackable: true, trackingPhase: "P2", ruleSetRef: "lateralRaise", untrackableReason: null },
+            trackable: true, trackingPhase: "P0", ruleSetRef: "lateralRaise", untrackableReason: null },
         ]},
         { type: "straight", label: "Ana Antrenman", exercises: [
           { id: "db-lateral-raise", name: "Dumbbell Lateral Raise",
             coachNote: "hafif çapraz yukarı",
             videoUrl: "https://www.youtube.com/watch?v=ureBK3Q0uEM", embeddable: true,
             sets: 3, dose: { type: "reps", value: 12 }, restSec: [60, 90],
-            trackable: true, trackingPhase: "P2", ruleSetRef: "lateralRaise", untrackableReason: null },
+            trackable: true, trackingPhase: "P0", ruleSetRef: "lateralRaise", untrackableReason: null },
           { id: "cable-lateral-raise", name: "Cable Lateral Raise",
             coachNote: null,
             videoUrl: "https://www.youtube.com/watch?v=rO3vuRvtxIo", embeddable: true,
@@ -231,7 +235,8 @@ export const ownerProgram = {
             coachNote: "dirsek sabit, üstte 1sn",
             videoUrl: "https://www.youtube.com/watch?v=xX49MXefLWk", embeddable: true,
             sets: 4, dose: { type: "repRange", min: 10, max: 12 }, restSec: [60, 90],
-            trackable: true, trackingPhase: "P2", ruleSetRef: "hammerCurl", untrackableReason: null },
+            // "üstte 1sn" tutuş zaman katmanı motorda yok → form takibi rep + dirsek-sabit kuralı.
+            trackable: true, trackingPhase: "P0", ruleSetRef: "hammerCurl", untrackableReason: null },
           { id: "rope-pushdown", name: "Rope Pushdown",
             coachNote: "altta ipi yanlara aç",
             videoUrl: "https://www.youtube.com/watch?v=iKespECqOdM", embeddable: true,
