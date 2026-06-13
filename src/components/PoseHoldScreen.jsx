@@ -8,9 +8,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePoseTracking } from "../hooks/usePoseTracking";
 import { useHoldCounter } from "../hooks/useHoldCounter";
 import { getExercise } from "../exercises";
-import { doseLabel, slotPositionLabel } from "../lib/programPlayer";
+import { slotPositionLabel } from "../lib/programPlayer";
 import { setDoneHold, warningSayOptions } from "../lib/coachLines";
-import ExercisePreview from "./ExercisePreview";
+import WorkoutHud from "./WorkoutHud";
 
 const ABSENCE_REMINDER_MS = 45000;
 
@@ -29,6 +29,12 @@ export default function PoseHoldScreen({
   paused = false,
   handsFree = false,
   facingMode = "user",
+  onTogglePause,
+  onSkip,
+  onToggleVoice,
+  voiceOn = true,
+  onExit,
+  progressLabel,
 }) {
   const { exercise, block } = slot;
   const exerciseDef = getExercise(exercise.ruleSetRef);
@@ -151,22 +157,25 @@ export default function PoseHoldScreen({
   }
 
   return (
-    <section className="player player--pose">
+    <section className="player player--pose player--full">
       <div
         className={
           facingMode === "user"
-            ? "stage player-stage stage--mirrored"
-            : "stage player-stage"
+            ? "stage player-stage stage--full stage--mirrored"
+            : "stage player-stage stage--full"
         }
       >
         <video ref={videoRef} className="stage-video" />
         <canvas ref={canvasRef} className="stage-canvas" />
 
-        {/* UZAKTAN OKUNUR: aktif hareket adı sahne üst şeridinde. */}
+        {/* Üst saydam şerit: hareket adı + ilerleme. Uzaktan-okunur. */}
         {running && (
-          <p className="stage-exercise-name" aria-hidden="true">
-            {exercise.name}
-          </p>
+          <div className="stage-topbar" aria-hidden="true">
+            <p className="stage-exercise-name">{exercise.name}</p>
+            <p className="stage-progress">
+              {progressLabel ?? `${block.label} · ${slotPositionLabel(slot)}`}
+            </p>
+          </div>
         )}
 
         {stageNotice && (
@@ -201,39 +210,30 @@ export default function PoseHoldScreen({
             <span className="stage-count-unit">sn</span>
           </div>
         )}
-      </div>
 
-      <div className="player-pose-panel">
-        <p className="player-position">
-          {block.label} · {slotPositionLabel(slot)}
-        </p>
-        <div className="player-exercise-head">
-          <ExercisePreview exercise={exercise} size="sm" />
-          <h2 className="player-exercise">{exercise.name}</h2>
-        </div>
-        {exercise.coachNote && (
-          <p className="coach-note">“{exercise.coachNote}”</p>
-        )}
-        <p className="player-dose">
-          {doseLabel(exercise.dose)} · şu ana kadar {heldSeconds} sn
-        </p>
-
-        <div className="player-links">
-          <span className="meta-hint">{cameraHint}</span>
-        </div>
-
-        {/* Hands-free'de akışı Duraklat/Bitir (ProgramMode) yönetir;
-            manuel "Seti bitir" yalnız klasik modda — "X saniye tuttun". */}
+        {/* Manuel "Seti bitir" yalnız klasik (handsFree=false) modda. */}
         {!handsFree && (
           <button
             type="button"
-            className="btn btn-stop set-done"
+            className="hud-finish"
             onClick={finish}
             disabled={status === "loading"}
           >
             Seti bitir{heldSeconds > 0 ? ` · ${heldSeconds} sn tuttun` : ""}
           </button>
         )}
+
+        {/* Cam-üstü kontroller + yandan açılır önizleme paneli. */}
+        <WorkoutHud
+          exercise={exercise}
+          cameraHint={cameraHint}
+          paused={paused}
+          voiceOn={voiceOn}
+          onTogglePause={onTogglePause}
+          onSkip={onSkip}
+          onToggleVoice={onToggleVoice}
+          onExit={onExit}
+        />
       </div>
     </section>
   );

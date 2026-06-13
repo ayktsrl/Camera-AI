@@ -216,6 +216,9 @@ export default function ProgramMode({ onExit }) {
   }, [doneDayId]);
 
   let content;
+  // Tam-ekran kamera sahnesi aktif mi — öyleyse kontroller cam-üstü HUD'da,
+  // alt sticky kontrol + üst chrome + ilerleme satırı gizlenir (kamera dolu kalır).
+  let fullscreenStage = false;
   if (builder) {
     content = (
       <ProgramBuilder
@@ -383,6 +386,18 @@ export default function ProgramMode({ onExit }) {
       EXERCISES.some((e) => e.id === slot.exercise.ruleSetRef);
     // İzometrik (plank) → süre-tutma ekranı; diğer takipli → rep ekranı.
     const isometric = poseReady && isIsometricDose(slot.exercise.dose);
+    // Üst saydam şeritte ilerleme — gün + set sayacı (uzaktan okunur).
+    const progressLabel = `${playerState.day.label} · ${playerState.completedSets}/${playerState.slotCount} set`;
+    // Tam-ekran kamera ekranları (egzersiz/hold): kontroller cam-üstü HUD'a iner;
+    // alt sticky kontrol bu ekranlarda gizlenir (aşağıda fullscreenStage).
+    const hudProps = {
+      onTogglePause: togglePause,
+      onSkip: skipSlot,
+      onToggleVoice: () => setVoiceOn((v) => !v),
+      voiceOn,
+      onExit: exitToDays,
+      progressLabel,
+    };
     content = isometric ? (
       <PoseHoldScreen
         key={`set-${playerState.slotIndex}`}
@@ -392,6 +407,7 @@ export default function ProgramMode({ onExit }) {
         paused={paused}
         handsFree={playerState.handsFree}
         facingMode={facingMode}
+        {...hudProps}
       />
     ) : poseReady ? (
       <PoseSetScreen
@@ -403,6 +419,7 @@ export default function ProgramMode({ onExit }) {
         paused={paused}
         handsFree={playerState.handsFree}
         facingMode={facingMode}
+        {...hudProps}
       />
     ) : (
       <GuidedSetScreen
@@ -413,12 +430,15 @@ export default function ProgramMode({ onExit }) {
         handsFree={playerState.handsFree}
       />
     );
+    // Bu render'da tam-ekran kamera sahnesi var mı (HUD kendi kontrolünü taşır)?
+    fullscreenStage = poseReady;
   }
 
   const inWorkout = playerState != null && playerState.status !== "done";
 
   return (
-    <div className="program">
+    <div className={fullscreenStage ? "program program--full" : "program"}>
+      {!fullscreenStage && (
       <header className="program-top">
         <h1 className="program-brand">
           FormCoach<span className="brand-dot">.</span>
@@ -468,7 +488,8 @@ export default function ProgramMode({ onExit }) {
           </button>
         </div>
       </header>
-      {inWorkout && (
+      )}
+      {!fullscreenStage && inWorkout && (
         <p className="program-progress">
           {playerState.day.label} · {playerState.completedSets}/
           {playerState.slotCount} set
@@ -476,8 +497,9 @@ export default function ProgramMode({ onExit }) {
       )}
       {content}
 
-      {/* Tek kalıcı kontrol — akışı yalnız bu böler (tam-ekran tap YOK). */}
-      {inWorkout && (
+      {/* Alt sticky kontrol — yalnız tam-ekran OLMAYAN ekranlarda (rest/announce/
+          countdown/done). Tam-ekran kamerada kontroller cam-üstü HUD'a taşınır. */}
+      {!fullscreenStage && inWorkout && (
         <div className="handsfree-control">
           {paused ? (
             <div className="handsfree-paused">

@@ -7,7 +7,6 @@ import { usePoseTracking } from "../hooks/usePoseTracking";
 import { useRepCounter } from "../hooks/useRepCounter";
 import { getExercise } from "../exercises";
 import {
-  doseLabel,
   doseTargetReps,
   doseTargetSeconds,
   slotPositionLabel,
@@ -19,7 +18,7 @@ import {
   setDoneTimed,
   warningSayOptions,
 } from "../lib/coachLines";
-import ExercisePreview from "./ExercisePreview";
+import WorkoutHud from "./WorkoutHud";
 
 // >45 sn yokluk → TEK nazik sesli hatırlatma (owner kararı). Sonra sessiz.
 const ABSENCE_REMINDER_MS = 45000;
@@ -32,6 +31,14 @@ export default function PoseSetScreen({
   paused = false,
   handsFree = false,
   facingMode = "user",
+  // Tam-ekran HUD kontrolleri (ProgramMode'dan; yeni mantık YOK — mevcut
+  // togglePause/skipSlot/exitToDays/ses toggle'larına bağlanır).
+  onTogglePause,
+  onSkip,
+  onToggleVoice,
+  voiceOn = true,
+  onExit,
+  progressLabel,
 }) {
   const { exercise, block } = slot;
   const exerciseDef = getExercise(exercise.ruleSetRef);
@@ -253,22 +260,25 @@ export default function PoseSetScreen({
   const showActivityState = running && activityGated && !paused && status === "ready";
 
   return (
-    <section className="player player--pose">
+    <section className="player player--pose player--full">
       <div
         className={
           facingMode === "user"
-            ? "stage player-stage stage--mirrored"
-            : "stage player-stage"
+            ? "stage player-stage stage--full stage--mirrored"
+            : "stage player-stage stage--full"
         }
       >
         <video ref={videoRef} className="stage-video" />
         <canvas ref={canvasRef} className="stage-canvas" />
 
-        {/* UZAKTAN OKUNUR: aktif hareket adı sahne üst şeridinde. */}
+        {/* Üst saydam şerit: hareket adı + ilerleme (set/hedef). Uzaktan-okunur. */}
         {running && (
-          <p className="stage-exercise-name" aria-hidden="true">
-            {exercise.name}
-          </p>
+          <div className="stage-topbar" aria-hidden="true">
+            <p className="stage-exercise-name">{exercise.name}</p>
+            <p className="stage-progress">
+              {progressLabel ?? `${block.label} · ${slotPositionLabel(slot)}`}
+            </p>
+          </div>
         )}
 
         {stageNotice && (
@@ -330,42 +340,31 @@ export default function PoseSetScreen({
             {movementActive ? "✓ ALGILANIYOR" : "⏸ DURAKLATILDI — HAREKET YOK"}
           </div>
         )}
-      </div>
 
-      <div className="player-pose-panel">
-        <p className="player-position">
-          {block.label} · {slotPositionLabel(slot)}
-        </p>
-        <div className="player-exercise-head">
-          {/* Kamera ana sahne — önizleme küçük (sm) kalır, kamerayı ezmez. */}
-          <ExercisePreview exercise={exercise} size="sm" />
-          <h2 className="player-exercise">{exercise.name}</h2>
-        </div>
-        {exercise.coachNote && (
-          <p className="coach-note">“{exercise.coachNote}”</p>
-        )}
-        <p className="player-dose">
-          {doseLabel(exercise.dose)}
-          {target != null && ` · hedefte set otomatik biter`}
-          {targetSeconds != null && ` · süre dolunca set otomatik biter`}
-        </p>
-
-        <div className="player-links">
-          <span className="meta-hint">{cameraHint}</span>
-        </div>
-
-        {/* Hands-free'de akışı tek Duraklat butonu (ProgramMode) yönetir;
-            manuel "Seti bitir" yalnız klasik (handsFree=false) modda. */}
+        {/* Manuel "Seti bitir" yalnız klasik (handsFree=false) modda — cam-üstü
+            ince buton (alt orta). Program akışında handsFree=true → gizli. */}
         {!handsFree && (
           <button
             type="button"
-            className="btn btn-stop set-done"
+            className="hud-finish"
             onClick={finish}
             disabled={status === "loading"}
           >
             Seti bitir{repCount > 0 && faultyCount > 0 ? ` (${faultyCount} hatalı)` : ""}
           </button>
         )}
+
+        {/* Cam-üstü kontroller + yandan açılır önizleme paneli. */}
+        <WorkoutHud
+          exercise={exercise}
+          cameraHint={cameraHint}
+          paused={paused}
+          voiceOn={voiceOn}
+          onTogglePause={onTogglePause}
+          onSkip={onSkip}
+          onToggleVoice={onToggleVoice}
+          onExit={onExit}
+        />
       </div>
     </section>
   );

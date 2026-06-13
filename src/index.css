@@ -1147,6 +1147,262 @@ body,
   font-size: clamp(15px, 2.2vw, 18px);
 }
 
+/* ───────────── TAM-EKRAN ANTRENMAN (kamera ana sahne, cam-üstü HUD) ─────────────
+   Owner: telefon + salon. Egzersize/tutuşa geçince kamera viewport'u DOLDURUR;
+   bilgi + kontroller kamera ÜZERİNDE yarı-saydam yüzer. Mobil portrait öncelikli
+   (object-fit: cover ile dikey kaplar). Overlay saf CSS → kamera FPS'ine dokunmaz. */
+
+.program--full {
+  padding: 0;
+  max-width: none;
+}
+
+.player--full {
+  margin: 0;
+}
+
+/* Sahne viewport'u doldurur — sticky chrome/panel YOK; sadece kamera + HUD. */
+.stage--full {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  aspect-ratio: auto; /* 16:9 kutuyu ez — tam ekran */
+  width: 100%;
+  height: 100%;
+  height: 100dvh; /* mobil tarayıcı çubuğu güvenli */
+}
+
+.stage--full .stage-video {
+  object-fit: cover; /* portrait'te dikey kaplar, kenar boşluğu yok */
+}
+
+/* Üst saydam şerit: hareket adı + ilerleme. İnce karartı (okunur), kutu YOK. */
+.stage-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 18px 22px 28px;
+  background: linear-gradient(to bottom, rgba(19, 21, 18, 0.62), transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.stage-topbar .stage-exercise-name {
+  position: static;
+  margin: 0;
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.8);
+}
+
+.stage-topbar .stage-progress {
+  margin: 4px 0 0;
+  font-size: clamp(13px, 2.2vh, 16px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- Cam-üstü kontrol grubu (saydam, hafif, sağ alt) ---- */
+.hud-controls {
+  position: absolute;
+  right: 16px;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 4;
+}
+
+.hud-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 52px;
+  min-height: 52px; /* 44px+ dokunma hedefi */
+  padding: 6px 8px;
+  border: 1px solid rgba(244, 244, 241, 0.22);
+  border-radius: 14px;
+  background: rgba(19, 21, 18, 0.42);
+  backdrop-filter: blur(8px);
+  color: var(--paper);
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.hud-btn:hover {
+  background: rgba(19, 21, 18, 0.66);
+  border-color: rgba(244, 244, 241, 0.4);
+}
+
+.hud-btn:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.hud-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.hud-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.hud-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hud-btn--exit:hover {
+  border-color: var(--critical);
+  color: var(--critical);
+}
+
+/* Manuel "Seti bitir" (yalnız klasik mod) — alt orta, ince cam-üstü buton. */
+.hud-finish {
+  position: absolute;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 4;
+  padding: 14px 26px;
+  border: 1px solid rgba(244, 244, 241, 0.4);
+  border-radius: 999px;
+  background: rgba(19, 21, 18, 0.5);
+  backdrop-filter: blur(8px);
+  color: var(--paper);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.hud-finish:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+/* ---- Yandan açılır önizleme paneli (drawer) ---- */
+/* Sağ kenarda ince tab → tıkla: panel kayar. Varsayılan KAPALI (kamera dolu). */
+.preview-tab {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px;
+  border: 1px solid rgba(244, 244, 241, 0.22);
+  border-right: none;
+  border-radius: 12px 0 0 12px;
+  background: rgba(19, 21, 18, 0.5);
+  backdrop-filter: blur(8px);
+  color: var(--paper);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.preview-tab:hover {
+  background: rgba(19, 21, 18, 0.72);
+}
+
+.preview-tab:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.preview-tab-arrow {
+  writing-mode: horizontal-tb;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.preview-tab--open {
+  right: min(78vw, 320px);
+  border-radius: 12px 0 0 12px;
+}
+
+.preview-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: rgba(19, 21, 18, 0.4);
+}
+
+.preview-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 6;
+  width: min(78vw, 320px);
+  height: 100%;
+  padding: 28px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(19, 21, 18, 0.92);
+  backdrop-filter: blur(14px);
+  border-left: 1px solid var(--hairline);
+  transform: translateX(100%);
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  overflow-y: auto;
+}
+
+.preview-drawer--open {
+  transform: translateX(0);
+}
+
+.preview-drawer-name {
+  margin: 4px 0 0;
+  font-size: clamp(20px, 4vw, 26px);
+  font-weight: 700;
+}
+
+.preview-drawer-note {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.preview-drawer-dose {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.preview-drawer-hint {
+  margin: auto 0 0;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-drawer {
+    transition: none;
+  }
+}
+
 /* Dinlenme ekranı */
 .rest {
   align-items: center;
@@ -1313,6 +1569,31 @@ body,
 
   .controls {
     margin-top: 0;
+  }
+
+  /* Tam-ekran kamera mobilde: büyük rakam topbar altına; uyarı, kontrol
+     grubunun (sağ alt) ÜZERİNE binmesin diye alt-uyarı genişlikte ortalanır. */
+  .stage--full .stage-count {
+    top: 16%;
+    left: 20px;
+    font-size: clamp(96px, 34vw, 220px);
+  }
+
+  .stage--full .stage-count--time {
+    top: 16%;
+    right: 20px;
+    left: auto;
+    font-size: clamp(80px, 28vw, 180px);
+  }
+
+  .stage--full .stage-warning {
+    right: 84px; /* kontrol grubu sağda — uyarı onun soluna sığar */
+    left: 16px;
+  }
+
+  /* Aktivite durumu kontrol grubunun üstünde kalsın (çakışmasın). */
+  .stage--full .activity-state {
+    bottom: 96px;
   }
 }
 
