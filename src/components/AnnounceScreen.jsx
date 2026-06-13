@@ -33,6 +33,9 @@ export default function AnnounceScreen({
   paused,
   onDone,
   facingMode = "user",
+  // Görsel ayna — antrenman sahnesiyle tutarlı kalsın diye (yerleşim önizlemesi
+  // ile sonraki set aynı görünür). Yalnız görsel; pose motoru etkilenmez.
+  mirror = true,
 }) {
   const { exercise, block } = slot;
   const target = doseTargetReps(exercise.dose);
@@ -155,7 +158,7 @@ export default function AnnounceScreen({
       {/* Set başı kamera + yerleştirme asistanı — ekrana bakmadan yerleş. */}
       <div
         className={
-          facingMode === "user"
+          mirror
             ? "placement-stage stage--mirrored"
             : "placement-stage"
         }

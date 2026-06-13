@@ -31,6 +31,12 @@ export default function PoseSetScreen({
   paused = false,
   handsFree = false,
   facingMode = "user",
+  // Görsel ayna — facingMode'dan bağımsız (ProgramMode'dan gelir). Yalnız
+  // .stage--mirrored görsel transform'unu sürer; pose motoru ETKİLENMEZ.
+  mirror = true,
+  onSwitchCamera,
+  hasMultipleCameras = false,
+  onToggleMirror,
   // Tam-ekran HUD kontrolleri (ProgramMode'dan; yeni mantık YOK — mevcut
   // togglePause/skipSlot/exitToDays/ses toggle'larına bağlanır).
   onTogglePause,
@@ -264,7 +270,7 @@ export default function PoseSetScreen({
     <section className="player player--pose player--full">
       <div
         className={
-          facingMode === "user"
+          mirror
             ? "stage player-stage stage--full stage--mirrored"
             : "stage player-stage stage--full"
         }
@@ -367,6 +373,11 @@ export default function PoseSetScreen({
           onExit={onExit}
           lockPhase={lockPhase}
           onRelock={relock}
+          facingMode={facingMode}
+          onSwitchCamera={onSwitchCamera}
+          hasMultipleCameras={hasMultipleCameras}
+          mirror={mirror}
+          onToggleMirror={onToggleMirror}
         />
       </div>
     </section>

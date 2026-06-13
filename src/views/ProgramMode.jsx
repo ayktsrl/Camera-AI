@@ -13,6 +13,7 @@ import {
 } from "../lib/programPlayer";
 import { createCoach } from "../lib/speech";
 import { readStored, writeStored } from "../lib/storage";
+import { CAMERA_MIRROR_KEY, defaultMirrorFor } from "../lib/cameraView";
 import {
   loadCustomPrograms,
   saveCustomProgram,
@@ -50,6 +51,7 @@ const STORAGE_KEYS = {
   voice: "formcoach_voice_v1",
   repVoice: "formcoach_rep_voice_v1", // tekrar sayımı sesi (varsayılan açık)
   camera: "formcoach_camera_facing_v1", // "user" | "environment" — ön/arka kamera
+  mirror: CAMERA_MIRROR_KEY, // bool — manuel görsel ayna (facingMode'dan bağımsız)
   history: "formcoach_program_history_v1", // { [dayId]: ISO tarih } — son tamamlanma
 };
 
@@ -91,6 +93,16 @@ export default function ProgramMode({ onExit }) {
   useEffect(() => {
     writeStored(STORAGE_KEYS.camera, facingMode);
   }, [facingMode]);
+
+  // Görsel ayna — facingMode'dan BAĞIMSIZ manuel override. Varsayılan facingMode'a
+  // göre türetilir (ön=ayna açık), ama owner sol/sağ form uyarısı ters gelmesin diye
+  // kapatabilir. SADECE görsel transform; pose motoru/landmark/çizim ETKİLENMEZ.
+  const [mirror, setMirror] = useState(() =>
+    readStored(STORAGE_KEYS.mirror, defaultMirrorFor(facingMode))
+  );
+  useEffect(() => {
+    writeStored(STORAGE_KEYS.mirror, mirror);
+  }, [mirror]);
 
   // Birden fazla kamera var mı — yoksa çevir düğmesi gizlenir (masaüstü tek kamera).
   const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
@@ -405,6 +417,7 @@ export default function ProgramMode({ onExit }) {
         paused={paused}
         onDone={handleAdvancePhase}
         facingMode={facingMode}
+        mirror={mirror}
       />
     );
   } else if (playerState.status === "countdown") {
@@ -435,6 +448,13 @@ export default function ProgramMode({ onExit }) {
       voiceOn,
       onExit: exitToDays,
       progressLabel,
+      // Kamera görünüm kontrolleri — antrenman sırasında cam-üstü HUD'dan.
+      // (facingMode screen prop'undan ayrıca geçiyor; burada tekrarlanmaz.)
+      onSwitchCamera: () =>
+        setFacingMode((f) => (f === "user" ? "environment" : "user")),
+      hasMultipleCameras,
+      mirror,
+      onToggleMirror: () => setMirror((m) => !m),
     };
     content = isometric ? (
       <PoseHoldScreen

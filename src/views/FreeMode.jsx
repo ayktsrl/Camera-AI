@@ -7,12 +7,14 @@ import { useRepCounter } from "../hooks/useRepCounter";
 import { createCoach } from "../lib/speech";
 import { CAMERA_HINT_LABELS } from "../lib/faultRules";
 import { readStored, writeStored } from "../lib/storage";
+import { CAMERA_MIRROR_KEY, defaultMirrorFor } from "../lib/cameraView";
 import { EXERCISES, getExercise } from "../exercises";
 
 const STORAGE_KEYS = {
   voice: "formcoach_voice_v1",
   exercise: "formcoach_exercise_v1",
   camera: "formcoach_camera_facing_v1", // ön/arka kamera (Program Modu ile paylaşılır)
+  mirror: CAMERA_MIRROR_KEY, // manuel görsel ayna (Program Modu ile paylaşılır)
 };
 
 const MOTIVATION_AFTER_MS = 9000;
@@ -41,6 +43,11 @@ export default function FreeMode({ onOpenProgram, onOpenCalibration }) {
   const [facingMode, setFacingMode] = useState(() =>
     readStored(STORAGE_KEYS.camera, "user")
   );
+  // Görsel ayna — facingMode'dan bağımsız manuel override (Program Modu ile aynı
+  // anahtar). SADECE görsel transform; pose motoru ETKİLENMEZ.
+  const [mirror, setMirror] = useState(() =>
+    readStored(STORAGE_KEYS.mirror, defaultMirrorFor(facingMode))
+  );
   const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
 
   const exercise = getExercise(exerciseId);
@@ -57,6 +64,10 @@ export default function FreeMode({ onOpenProgram, onOpenCalibration }) {
   useEffect(() => {
     writeStored(STORAGE_KEYS.camera, facingMode);
   }, [facingMode]);
+
+  useEffect(() => {
+    writeStored(STORAGE_KEYS.mirror, mirror);
+  }, [mirror]);
 
   // Birden fazla kamera tespiti — yoksa çevir düğmesi gizli.
   useEffect(() => {
@@ -150,7 +161,7 @@ export default function FreeMode({ onOpenProgram, onOpenCalibration }) {
 
   return (
     <div className="app">
-      <main className={facingMode === "user" ? "stage stage--mirrored" : "stage"}>
+      <main className={mirror ? "stage stage--mirrored" : "stage"}>
         <video ref={videoRef} className="stage-video" />
         <canvas ref={canvasRef} className="stage-canvas" />
 
@@ -319,6 +330,17 @@ export default function FreeMode({ onOpenProgram, onOpenCalibration }) {
               {facingMode === "user" ? "Ön kamera" : "Arka kamera"}
             </button>
           )}
+          {/* Manuel ayna — facingMode'dan bağımsız (sol/sağ form uyarısı ters
+              gelmesin diye kapatılabilir). Yalnız görsel; pose motoru etkilenmez. */}
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => setMirror((m) => !m)}
+            aria-pressed={mirror}
+            title={mirror ? "Aynayı kapat" : "Aynayı aç"}
+          >
+            {mirror ? "Ayna açık" : "Ayna kapalı"}
+          </button>
           {onOpenCalibration && (
             <button
               type="button"

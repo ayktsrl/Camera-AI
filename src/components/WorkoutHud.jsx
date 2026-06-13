@@ -23,6 +23,15 @@ export default function WorkoutHud({
   onExit,
   lockPhase,
   onRelock,
+  // Kamera görünüm kontrolleri — SADECE görsel. facingMode ön/arka kamera
+  // (ProgramMode/FreeMode'daki mevcut setFacingMode'a bağlanır); mirror manuel
+  // ayna (facingMode'dan bağımsız). İkisi de yeni iş mantığı taşımaz; pose motoru
+  // etkilenmez. onSwitchCamera yoksa veya tek kamera varsa kamera düğmesi gizli.
+  facingMode,
+  onSwitchCamera,
+  hasMultipleCameras,
+  mirror,
+  onToggleMirror,
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false); // varsayılan KAPALI
 
@@ -89,6 +98,44 @@ export default function WorkoutHud({
               {voiceOn ? "🔊" : "🔇"}
             </span>
             <span className="hud-label">{voiceOn ? "Ses" : "Sessiz"}</span>
+          </button>
+        )}
+        {/* Ön/arka kamera — antrenman sırasında facingMode'u değiştirir. Yalnız
+            birden fazla kamera varsa görünür (mevcut tespit; masaüstü tek kamerada
+            gizli). Sadece kamera kaynağını çevirir — pose motoru ham koordinatla
+            çalışmaya devam eder. */}
+        {onSwitchCamera && hasMultipleCameras && (
+          <button
+            type="button"
+            className="hud-btn"
+            onClick={onSwitchCamera}
+            title={
+              facingMode === "user"
+                ? "Arka kameraya geç"
+                : "Ön kameraya geç"
+            }
+          >
+            <span className="hud-icon" aria-hidden="true">⟲</span>
+            <span className="hud-label">
+              {facingMode === "user" ? "Ön" : "Arka"}
+            </span>
+          </button>
+        )}
+        {/* Ayna (mirror) — facingMode'dan BAĞIMSIZ manuel görsel ayna. Owner sol/sağ
+            form uyarısı ön kamerada ters gelmesin diye aynayı kapatabilir. Yalnız
+            görsel transform; landmark/çizim/motor DEĞİŞMEZ. */}
+        {onToggleMirror && (
+          <button
+            type="button"
+            className="hud-btn"
+            onClick={onToggleMirror}
+            aria-pressed={mirror}
+            title={mirror ? "Aynayı kapat" : "Aynayı aç"}
+          >
+            <span className="hud-icon" aria-hidden="true">
+              {mirror ? "◑" : "◐"}
+            </span>
+            <span className="hud-label">Ayna</span>
           </button>
         )}
         {onExit && (

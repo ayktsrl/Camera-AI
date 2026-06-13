@@ -29,6 +29,12 @@ export default function PoseHoldScreen({
   paused = false,
   handsFree = false,
   facingMode = "user",
+  // Görsel ayna — facingMode'dan bağımsız (ProgramMode'dan gelir). Yalnız görsel
+  // transform; pose/hold motoru ETKİLENMEZ.
+  mirror = true,
+  onSwitchCamera,
+  hasMultipleCameras = false,
+  onToggleMirror,
   onTogglePause,
   onSkip,
   onToggleVoice,
@@ -160,7 +166,7 @@ export default function PoseHoldScreen({
     <section className="player player--pose player--full">
       <div
         className={
-          facingMode === "user"
+          mirror
             ? "stage player-stage stage--full stage--mirrored"
             : "stage player-stage stage--full"
         }
@@ -233,6 +239,11 @@ export default function PoseHoldScreen({
           onSkip={onSkip}
           onToggleVoice={onToggleVoice}
           onExit={onExit}
+          facingMode={facingMode}
+          onSwitchCamera={onSwitchCamera}
+          hasMultipleCameras={hasMultipleCameras}
+          mirror={mirror}
+          onToggleMirror={onToggleMirror}
         />
       </div>
     </section>
