@@ -5,8 +5,9 @@
 // + temel bodyweight hareketlerden türetilmiştir.
 //
 // SINIR: trackable === true olanlar pose form analizine GİRER (kameradan otomatik
-// tekrar sayımı). Şu an SADECE squat ailesi (ruleSetRef "squat") ve push-up
-// (ruleSetRef "pushup") gerçek motora bağlıdır — bu yüzden P0'da onlar takiplidir.
+// tekrar sayımı). Şu an squat ailesi (ruleSetRef "squat"), push-up
+// (ruleSetRef "pushup") ve lunge (ruleSetRef "lunge") gerçek motora bağlıdır —
+// bu yüzden P0'da onlar takiplidir.
 // Diğer her şey "rehberli": kullanıcı kendi sayar, uyarı + önizleme verilir.
 // (Faz mantığı programPlayer.isPoseTracked ile aynı: trackable && ruleSetRef &&
 //  trackingPhase <= ACTIVE_TRACKING_PHASE.)
@@ -59,12 +60,12 @@ export const EXERCISE_LIBRARY = [
     id: "lunge",
     name: "Lunge",
     type: "bodyweight",
-    trackable: false,
-    trackingPhase: null,
-    ruleSetRef: null,
+    trackable: true,
+    trackingPhase: "P0",
+    ruleSetRef: "lunge",
     defaultDose: { type: "perSide", value: 10 },
-    coachNote: "Diz asla öne fırlamasın, gövde dik",
-    untrackableReason: "Tek bacak desteği + derinlik varyasyonu pose motorunda henüz güvenilir değil.",
+    coachNote: "Lunge'da diz asla öne fırlamasın, gövde hafif öne eğilsin",
+    untrackableReason: null,
   },
   {
     id: "plank",

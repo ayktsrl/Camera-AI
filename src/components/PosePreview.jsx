@@ -85,6 +85,24 @@ const POSES = {
       wrist: [30, 88],
     },
   },
+  lunge: {
+    // Yan görünüm: ayakta (tepe) → öne hamle, ön diz bükük + gövde hafif öne (dip).
+    top: {
+      head: [50, 16],
+      shoulder: [50, 26],
+      hip: [50, 52],
+      knee: [50, 72],
+      ankle: [50, 90],
+    },
+    bottom: {
+      // Öne hamle: ön ayak ileride (sağda), ön diz ~90° bükük; gövde hafif öne eğik.
+      head: [46, 26],
+      shoulder: [48, 36],
+      hip: [50, 60],
+      knee: [66, 74], // ön diz öne-aşağı (ayak ucunun üstünde, geçmeden)
+      ankle: [68, 90], // ön ayak ileride
+    },
+  },
   generic: {
     top: {
       head: [50, 16],
@@ -103,6 +121,7 @@ function poseKeyFor(exercise) {
   const ref = exercise?.ruleSetRef;
   if (ref === "squat") return "squat";
   if (ref === "pushup") return "pushup";
+  if (ref === "lunge") return "lunge";
   return "generic";
 }
 

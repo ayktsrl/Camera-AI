@@ -42,15 +42,16 @@ describe("exerciseLibrary — şema bütünlüğü", () => {
     }
   });
 
-  it("takipli hareketler yalnız squat + pushup motoruna bağlı (P0 kapsamı)", () => {
+  it("takipli hareketler yalnız squat + pushup + lunge motoruna bağlı (P0 kapsamı)", () => {
     const tracked = EXERCISE_LIBRARY.filter((e) => e.trackable);
-    expect(tracked.length).toBeGreaterThanOrEqual(2);
-    expect(tracked.every((e) => ["squat", "pushup"].includes(e.ruleSetRef))).toBe(
-      true
-    );
-    // push-up ve en az bir squat ailesi takipli olmalı
+    expect(tracked.length).toBeGreaterThanOrEqual(3);
+    expect(
+      tracked.every((e) => ["squat", "pushup", "lunge"].includes(e.ruleSetRef))
+    ).toBe(true);
+    // push-up, en az bir squat ailesi ve lunge takipli olmalı
     expect(tracked.some((e) => e.ruleSetRef === "pushup")).toBe(true);
     expect(tracked.some((e) => e.ruleSetRef === "squat")).toBe(true);
+    expect(tracked.some((e) => e.ruleSetRef === "lunge")).toBe(true);
   });
 });
 

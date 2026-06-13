@@ -53,7 +53,8 @@ export const ownerProgram = {
             coachNote: "Lunge'da diz asla öne fırlamasın, gövde hafif öne eğilsin",
             videoUrl: "https://www.youtube.com/watch?v=Tc-9yvl5Zt8", embeddable: false,
             sets: 4, dose: { type: "reps", value: 12 },
-            trackable: true, trackingPhase: "P1", ruleSetRef: "lunge", untrackableReason: null },
+            // Lunge yarısı pose-takipli (ruleSetRef "lunge"); lateral kolu P2.
+            trackable: true, trackingPhase: "P0", ruleSetRef: "lunge", untrackableReason: null },
           { id: "squat-press", name: "Squat + Shoulder Dumbbell Press",
             coachNote: "Press'te dirsekleri çok açma, biraz öne al",
             videoUrl: "https://www.youtube.com/watch?v=0RAzZhXnsww", embeddable: false,
