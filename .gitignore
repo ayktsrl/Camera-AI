@@ -1,3 +1,6 @@
+# Agent workspace leak guard (must not be committed into product repo)
+agents/
+
 # Logs
 logs
 *.log

@@ -140,6 +140,47 @@ body,
   animation: none;
   color: var(--accent);
   font-size: clamp(64px, 16vh, 132px);
+  transition: color 200ms ease, opacity 200ms ease;
+}
+
+/* Activity-gated süre DONMUŞ — hareket algılanmıyor: soluk (plank "broken" dili). */
+.stage-count--time.stage-count--time-paused {
+  color: rgba(244, 244, 241, 0.5);
+}
+
+/* GÖRÜNÜR aktivite durumu — sahne altında net şerit. Owner uygulamanın
+   gerçekten algıladığını GÖRSÜN: yeşil "algılanıyor" / amber "duraklatıldı". */
+.activity-state {
+  position: absolute;
+  left: 50%;
+  bottom: 84px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: clamp(15px, 2.2vh, 20px);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+  transition: background 200ms ease, color 200ms ease;
+  pointer-events: none;
+}
+
+.activity-state--active {
+  background: rgba(74, 222, 128, 0.16);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+}
+
+.activity-state--paused {
+  background: rgba(19, 21, 18, 0.72);
+  color: var(--warn);
+  border: 1px solid rgba(230, 168, 79, 0.5);
+  font-size: clamp(17px, 2.6vh, 24px);
+  animation: warning-in 240ms ease-out;
 }
 
 /* Anlık form uyarısı — sahne altı, amber */

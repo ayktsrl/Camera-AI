@@ -12,6 +12,7 @@ import {
   doseTargetSeconds,
   slotPositionLabel,
 } from "../lib/programPlayer";
+import { createActivityGate } from "../lib/activityGate";
 import ExercisePreview from "./ExercisePreview";
 
 // >45 sn yokluk → TEK nazik sesli hatırlatma (owner kararı). Sonra sessiz.
@@ -37,9 +38,16 @@ export default function PoseSetScreen({
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
+  // Süre-dozlu TAKİPLİ harekette aktivite kapısı devrededir (örn. Jumping Jack).
+  // Rep-dozlu setlerde (target != null) hiç kullanılmaz — onlar zaten yalnız
+  // gerçek rep sayar. (target == null && targetSeconds != null) → activity-gated.
+  const activityGated = targetSeconds != null;
+
   const [running, setRunning] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(targetSeconds);
+  // Süre-dozlu sette HAREKET algılanıyor mu (görünür durum + süre akışı kapısı).
+  const [movementActive, setMovementActive] = useState(false);
   const startedRef = useRef(false);
   const doneRef = useRef(false);
 
@@ -47,6 +55,13 @@ export default function PoseSetScreen({
   // zaten frame=null'da ilerlemez); >45 sn yoklukta TEK nazik ses.
   const absenceSinceRef = useRef(null);
   const reminderFiredRef = useRef(false);
+
+  // Aktivite kapısı — rep/faz event'lerinden "hareket var mı" sinyali (plank
+  // holdEngine smart-pause felsefesi). Yalnız süre-dozlu takipli harekette anlamlı.
+  const activityGateRef = useRef(null);
+  if (activityGateRef.current === null) {
+    activityGateRef.current = createActivityGate();
+  }
 
   // Tekrar sayımı sesi ayardan kapatılabilir (varsayılan açık) — owner kararı 1.
   const repVoiceRef = useRef(repVoice);
@@ -56,6 +71,11 @@ export default function PoseSetScreen({
 
   const handleCoachEvent = useCallback(
     (event) => {
+      // Aktivite kapısını HER anlamlı hareket event'iyle besle (rep + faz geçişi).
+      // Süre-dozlu sette bu sinyal geri sayımı sürer; rep-dozlu sette zararsız.
+      if (activityGateRef.current.isActivityEvent(event)) {
+        activityGateRef.current.noteActivity(performance.now());
+      }
       if (event.type === "rep") {
         if (repVoiceRef.current) coach.sayCount(event.count);
       } else if (event.type === "warning") {
@@ -93,6 +113,8 @@ export default function PoseSetScreen({
     if (status !== "ready" || startedRef.current) return;
     startedRef.current = true;
     reset();
+    activityGateRef.current.reset();
+    setMovementActive(false);
     setRunning(true);
   }, [status, reset]);
 
@@ -130,15 +152,50 @@ export default function PoseSetScreen({
     if (repCount >= target) finish();
   }, [repCount, running, target, finish]);
 
-  // Süre-dozlu (örn. Jumping Jack 45 sn): geri sayım. Pause veya kullanıcı kareden
-  // çıkınca DONAR (rep sayımıyla tutarlı akıllı-duraklama). Canlı rep + form uyarısı
-  // süre boyunca devam eder.
+  // Süre-dozlu (örn. Jumping Jack 45 sn): ACTIVITY-GATED geri sayım. Süre YALNIZ
+  // hareket aktif algılandıkça akar — kişi karede olsa da hareketsizse DONAR
+  // (kör kronometre değil; plank holdEngine smart-pause felsefesi). Aktivite
+  // kapısı rep + faz geçişlerinden beslenir (handleCoachEvent → noteActivity).
+  //
+  // Poll loop (250 ms): her tikte gerçek geçen aktif zamanı biriktirir → tam
+  // saniye dolduğunda secondsLeft -1. Görünür durumu (movementActive) ve uzun
+  // hareketsizlikte TEK ölçülü sesli hatırlatmayı da bu loop sürer.
   useEffect(() => {
-    if (!running || targetSeconds == null) return undefined;
-    if (paused || !hasActiveUser) return undefined;
-    const id = setInterval(() => setSecondsLeft((s) => (s == null ? s : s - 1)), 1000);
+    if (!running || !activityGated) return undefined;
+    // Pause iken loop hiç çalışmaz → süre donar. Görünür rozet zaten paused'da
+    // gizli (showActivityState !paused gerektirir), ayrıca setState gerekmez.
+    if (paused) return undefined;
+
+    const gate = activityGateRef.current;
+    let lastTick = performance.now();
+    let activeMsAccum = 0; // birikmiş aktif zaman (ms) — tam saniyede secondsLeft düşer
+
+    const id = setInterval(() => {
+      const now = performance.now();
+      const dt = now - lastTick;
+      lastTick = now;
+
+      // Kişi karede mi (varlık) VE hareket ediyor mu (aktivite)? İkisi de gerekli.
+      const active = hasActiveUser && gate.isActive(now);
+      setMovementActive(active);
+
+      if (active) {
+        if (dt > 0 && dt < 2000) activeMsAccum += dt; // sıçrama emniyeti (holdEngine ile aynı)
+        if (activeMsAccum >= 1000) {
+          const whole = Math.floor(activeMsAccum / 1000);
+          activeMsAccum -= whole * 1000;
+          setSecondsLeft((s) => (s == null ? s : Math.max(0, s - whole)));
+        }
+      } else {
+        // Duraklamada birikimi sıfırlama gerekmez; akış zaten durdu. Uzun
+        // hareketsizlikte ölçülü tek hatırlatma (cooldown gate içinde).
+        if (gate.shouldPrompt(now)) {
+          coach.announce("Hareketi göremiyorum, devam et", { interrupt: true });
+        }
+      }
+    }, 250);
     return () => clearInterval(id);
-  }, [running, targetSeconds, paused, hasActiveUser]);
+  }, [running, activityGated, paused, hasActiveUser, coach]);
 
   // Süre dolunca set otomatik biter → repEngine özeti teslim → REST → sonraki ANNOUNCE.
   useEffect(() => {
@@ -167,10 +224,15 @@ export default function PoseSetScreen({
     stageNotice = errorMessage;
   } else if (paused) {
     stageNotice = "Duraklatıldı";
-  } else if (running && !hasActiveUser) {
+  } else if (running && !hasActiveUser && !activityGated) {
     // Akıllı duraklama — sessiz nötr im (owner: "demeden bekle").
+    // Süre-dozlu sette yokluk da activity-gated rozetle gösterilir (aşağıda).
     stageNotice = "Bekleniyor…";
   }
+
+  // Süre-dozlu sette GÖRÜNÜR aktivite durumu (owner güveni için kritik):
+  // hareket algılanıyorsa süre akıyor; algılanmıyorsa BÜYÜK net "duraklatıldı".
+  const showActivityState = running && activityGated && !paused && status === "ready";
 
   return (
     <section className="player player--pose">
@@ -203,14 +265,34 @@ export default function PoseSetScreen({
           </div>
         )}
 
-        {/* Süre-dozlu pose seti: büyük geri sayım rozeti (sürenin geçtiği BARİZ). */}
+        {/* Süre-dozlu pose seti: büyük geri sayım rozeti. ACTIVE iken accent
+            (akıyor), duraklamada soluk (donmuş) — plank hold timer ile aynı dil. */}
         {running && targetSeconds != null && secondsLeft != null && (
           <div
-            className="stage-count stage-count--time"
-            aria-label="Kalan süre"
+            className={
+              showActivityState && !movementActive
+                ? "stage-count stage-count--time stage-count--time-paused"
+                : "stage-count stage-count--time"
+            }
+            aria-label="Kalan aktif süre"
           >
             {Math.max(0, secondsLeft)}
             <span className="stage-count-unit">sn</span>
+          </div>
+        )}
+
+        {/* GÖRÜNÜR aktivite durumu — owner uygulamanın GERÇEKTEN algıladığını GÖRSÜN. */}
+        {showActivityState && (
+          <div
+            className={
+              movementActive
+                ? "activity-state activity-state--active"
+                : "activity-state activity-state--paused"
+            }
+            role="status"
+            aria-live="polite"
+          >
+            {movementActive ? "✓ Algılanıyor" : "⏸ Hareket algılanmıyor — duraklatıldı"}
           </div>
         )}
       </div>
