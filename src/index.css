@@ -718,8 +718,9 @@ body,
   border-bottom-color: var(--accent);
 }
 
-/* İn-app hedef-poz silüeti — dış görsel/link yok, kendi çizimimiz (offline).
-   Üç boyut: strip (gün satırı), sm (pose paneli), md (rehberli set ekranı). */
+/* İn-app hedef-hareket önizlemesi — GERÇEK egzersiz fotoğrafı (offline bundle,
+   Unlicense). Dış link/video yok. Üç boyut: strip (gün satırı), sm (pose paneli),
+   md (rehberli set ekranı). Animasyonlu: start↔end pozları arası yavaş crossfade. */
 .pose-preview {
   display: inline-flex;
   align-items: center;
@@ -746,18 +747,67 @@ body,
   width: 132px;
 }
 
-.pose-preview-svg {
+/* Foto katmanı — kutuyu tam doldurur, oranı korur (kırpar). */
+.pose-preview-img {
   width: 100%;
   height: 100%;
   display: block;
+  object-fit: cover;
+  object-position: center 30%; /* baş/gövde kadrajda kalsın */
+  user-select: none;
 }
 
-/* Animasyonlu çöp adam — rAF JS tarafında durdurulur; bu yalnız güvenlik ağı.
-   prefers-reduced-motion açıksa figür sabit kalır (JS zaten statik kareyi basar). */
+/* Crossfade: start altta sabit, end üstte; opacity döngüde 0→1→0 salınır.
+   Tam tur ~2.5s (her uçta kısa bekleme ile "başlangıç → bitiş" okunur). */
+.pose-preview--animated .pose-preview-img {
+  position: absolute;
+  inset: 0;
+}
+
+.pose-preview--animated .pose-preview-img--end {
+  opacity: 0;
+  animation: pose-crossfade 2.5s ease-in-out infinite;
+}
+
+@keyframes pose-crossfade {
+  0% {
+    opacity: 0;
+  }
+  35% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Nötr fallback (foto yok / yüklenemedi) — ÇÖP ADAM DEĞİL: sade harf rozeti. */
+.pose-preview-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-weight: 600;
+  font-size: 1.5rem;
+  letter-spacing: 0.02em;
+  color: var(--muted, var(--accent));
+  background: var(--ink-raise);
+  opacity: 0.7;
+}
+
+/* prefers-reduced-motion → crossfade durur; statik bitiş pozu kalır (JS de strip/
+   reduced'da end pozunu render eder, bu CSS güvenlik ağı). */
 @media (prefers-reduced-motion: reduce) {
-  .pose-preview-svg * {
-    transition: none !important;
-    animation: none !important;
+  .pose-preview--animated .pose-preview-img--end {
+    animation: none;
+    opacity: 1; /* hedef pozu (bitiş) sabit göster */
   }
 }
 
