@@ -9,6 +9,7 @@ import { getExercise } from "../exercises";
 import {
   doseLabel,
   doseTargetReps,
+  doseTargetSeconds,
   slotPositionLabel,
 } from "../lib/programPlayer";
 import ExercisePreview from "./ExercisePreview";
@@ -27,6 +28,10 @@ export default function PoseSetScreen({
   const { exercise, block } = slot;
   const exerciseDef = getExercise(exercise.ruleSetRef);
   const target = doseTargetReps(exercise.dose);
+  // Süre-dozlu pose hareketi (örn. Jumping Jack 45 sn): hedef rep YOK → geri sayımla
+  // biter. KÖK NEDEN düzeltmesi: bu yol olmadan time-dozlu pose seti hiç bitmiyordu
+  // → hands-free akış (rest/sonraki hareket) hiç görünmüyordu.
+  const targetSeconds = target == null ? doseTargetSeconds(exercise.dose) : null;
   const cameraHint = exerciseDef.cameraHint ?? "Kamera: 45° çapraz, ~2 m";
 
   const videoRef = useRef(null);
@@ -34,6 +39,7 @@ export default function PoseSetScreen({
 
   const [running, setRunning] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(targetSeconds);
   const startedRef = useRef(false);
   const doneRef = useRef(false);
 
@@ -118,11 +124,27 @@ export default function PoseSetScreen({
     setFinishing(true);
   }, [finishSet]);
 
-  // Hedefe ulaşınca set otomatik biter.
+  // Hedefe ulaşınca set otomatik biter (rep-dozlu).
   useEffect(() => {
     if (!running || target == null) return;
     if (repCount >= target) finish();
   }, [repCount, running, target, finish]);
+
+  // Süre-dozlu (örn. Jumping Jack 45 sn): geri sayım. Pause veya kullanıcı kareden
+  // çıkınca DONAR (rep sayımıyla tutarlı akıllı-duraklama). Canlı rep + form uyarısı
+  // süre boyunca devam eder.
+  useEffect(() => {
+    if (!running || targetSeconds == null) return undefined;
+    if (paused || !hasActiveUser) return undefined;
+    const id = setInterval(() => setSecondsLeft((s) => (s == null ? s : s - 1)), 1000);
+    return () => clearInterval(id);
+  }, [running, targetSeconds, paused, hasActiveUser]);
+
+  // Süre dolunca set otomatik biter → repEngine özeti teslim → REST → sonraki ANNOUNCE.
+  useEffect(() => {
+    if (!running || targetSeconds == null || secondsLeft == null) return;
+    if (secondsLeft <= 0) finish();
+  }, [secondsLeft, running, targetSeconds, finish]);
 
   // finishSet sonrası özet state'e düşünce sonucu teslim et.
   useEffect(() => {
@@ -180,6 +202,17 @@ export default function PoseSetScreen({
             {repCount}
           </div>
         )}
+
+        {/* Süre-dozlu pose seti: büyük geri sayım rozeti (sürenin geçtiği BARİZ). */}
+        {running && targetSeconds != null && secondsLeft != null && (
+          <div
+            className="stage-count stage-count--time"
+            aria-label="Kalan süre"
+          >
+            {Math.max(0, secondsLeft)}
+            <span className="stage-count-unit">sn</span>
+          </div>
+        )}
       </div>
 
       <div className="player-pose-panel">
@@ -197,6 +230,7 @@ export default function PoseSetScreen({
         <p className="player-dose">
           {doseLabel(exercise.dose)}
           {target != null && ` · hedefte set otomatik biter`}
+          {targetSeconds != null && ` · süre dolunca set otomatik biter`}
         </p>
 
         <div className="player-links">

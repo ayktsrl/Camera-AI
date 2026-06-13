@@ -21,9 +21,22 @@ function makeLm2d(positions = {}) {
   return lm;
 }
 
+// Ayaklar: kapalı = bileler kalça hizasında dar; açık = bileler kalçanın çok dışında.
+// Kalça genişliği |0.55-0.45| = 0.10. Kapalı bilek mesafesi ≈ 0.10 (oran ~1.0);
+// açık bilek mesafesi ≈ 0.30 (oran ~3.0 ≥ 1.5 → açık).
+const FEET_TOGETHER = {
+  [LM.LEFT_ANKLE]: { x: 0.46, y: 0.95 },
+  [LM.RIGHT_ANKLE]: { x: 0.54, y: 0.95 },
+};
+const FEET_APART = {
+  [LM.LEFT_ANKLE]: { x: 0.35, y: 0.95 },
+  [LM.RIGHT_ANKLE]: { x: 0.65, y: 0.95 },
+};
+
 // Eller YANDA (kapalı): kalça→omuz→bilek neredeyse dikey dizi → küçük abduction.
 // 2D ekran: omuz üstte, bilek omzun hemen altında-yanında → kol gövdeye yakın.
-function closedArmsLm() {
+// Bacak varsayılan: BİTİŞİK (kapalı poz).
+function closedArmsLm(feet = FEET_TOGETHER) {
   return makeLm2d({
     [LM.LEFT_HIP]: { x: 0.45, y: 0.6 },
     [LM.LEFT_SHOULDER]: { x: 0.45, y: 0.35 },
@@ -31,11 +44,27 @@ function closedArmsLm() {
     [LM.RIGHT_HIP]: { x: 0.55, y: 0.6 },
     [LM.RIGHT_SHOULDER]: { x: 0.55, y: 0.35 },
     [LM.RIGHT_WRIST]: { x: 0.56, y: 0.58 },
+    ...feet,
+  });
+}
+
+// Kollar YARI (geçiş): bilek omuz hizasında yanda → ~90° abduction → ara bant
+// (closedAngle ~90, 60<x<150). FSM descent/ascent geçişini bu kare onaylatır.
+function midArmsLm(feet = FEET_APART) {
+  return makeLm2d({
+    [LM.LEFT_HIP]: { x: 0.45, y: 0.6 },
+    [LM.LEFT_SHOULDER]: { x: 0.45, y: 0.35 },
+    [LM.LEFT_WRIST]: { x: 0.25, y: 0.35 }, // bilek omuz hizasında yanda
+    [LM.RIGHT_HIP]: { x: 0.55, y: 0.6 },
+    [LM.RIGHT_SHOULDER]: { x: 0.55, y: 0.35 },
+    [LM.RIGHT_WRIST]: { x: 0.75, y: 0.35 },
+    ...feet,
   });
 }
 
 // Eller BAŞ ÜSTÜ (açık): bilek omzun ÜSTÜNDE → kalça→omuz→bilek ~düz (büyük abduction).
-function openArmsLm() {
+// feet ile bacak durumu seçilir — gerçek jumping jack için FEET_APART.
+function openArmsLm(feet = FEET_APART) {
   return makeLm2d({
     [LM.LEFT_HIP]: { x: 0.45, y: 0.6 },
     [LM.LEFT_SHOULDER]: { x: 0.45, y: 0.35 },
@@ -43,6 +72,7 @@ function openArmsLm() {
     [LM.RIGHT_HIP]: { x: 0.55, y: 0.6 },
     [LM.RIGHT_SHOULDER]: { x: 0.55, y: 0.35 },
     [LM.RIGHT_WRIST]: { x: 0.55, y: 0.12 },
+    ...feet,
   });
 }
 
@@ -72,6 +102,84 @@ describe("jumpingJack.computeMetrics — closedAngle yönü", () => {
       [LM.RIGHT_HIP]: { visibility: 0.1 },
     });
     expect(jumpingJack.computeMetrics(lm, null)).toBeNull();
+  });
+});
+
+describe("jumpingJack — BİRLEŞİK koşul (kol + bacak), owner düzeltmesi", () => {
+  it("kollar baş üstü AMA bacaklar bitişik → closedAngle KİLİTLİ (FSM açık faza giremez)", () => {
+    const m = jumpingJack.computeMetrics(openArmsLm(FEET_TOGETHER), null);
+    expect(m.legsOpen).toBe(false);
+    // Kol açık (armClosedAngle düşük) olsa da bacak kapısı standing'de kilitler.
+    expect(m.armClosedAngle).toBeLessThan(60);
+    expect(m.closedAngle).toBeGreaterThanOrEqual(150); // standing bandı
+  });
+
+  it("kollar baş üstü VE bacaklar açık → closedAngle DÜŞÜK (gerçek jumping jack, FSM açık)", () => {
+    const m = jumpingJack.computeMetrics(openArmsLm(FEET_APART), null);
+    expect(m.legsOpen).toBe(true);
+    expect(m.closedAngle).toBeLessThan(60);
+    expect(m.closedAngle).toBeCloseTo(m.armClosedAngle, 5);
+  });
+
+  it("legSpread oranı ayak/kalça olarak hesaplanır (ölçek-bağımsız)", () => {
+    const apart = jumpingJack.computeMetrics(openArmsLm(FEET_APART), null);
+    const together = jumpingJack.computeMetrics(openArmsLm(FEET_TOGETHER), null);
+    expect(apart.legSpread).toBeGreaterThan(1.5);
+    expect(together.legSpread).toBeLessThan(1.5);
+  });
+
+  it("bacak görünmüyorsa koşul uygulanmaz → kol sinyaline düşülür (geriye-uyum)", () => {
+    const lm = openArmsLm({
+      [LM.LEFT_ANKLE]: { x: 0.46, y: 0.95, visibility: 0.1 },
+      [LM.RIGHT_ANKLE]: { x: 0.54, y: 0.95, visibility: 0.1 },
+    });
+    const m = jumpingJack.computeMetrics(lm, null);
+    expect(m.legsOpen).toBeNull(); // bacak ölçülemedi
+    expect(m.closedAngle).toBeCloseTo(m.armClosedAngle, 5); // kol sinyali yönetir
+  });
+
+  // --- FSM seviyesi: sadece-kol açma SAYMAZ, kol+bacak SAYAR ---
+  it("FSM: sadece kol açıp kapamak (bacak bitişik) tekrar SAYMAZ", () => {
+    const engine = createRepEngine(jumpingJack);
+    const events = [];
+    let t = 0;
+    // Kapalı → (yarı) → açık ama BACAK BİTİŞİK → (yarı) → kapalı. Bacak kapısı
+    // closedAngle'ı standing'de kilitler → "açık" faz hiç onaylanmaz → rep yok.
+    const seq = [
+      ...Array(6).fill(closedArmsLm(FEET_TOGETHER)),
+      ...Array(6).fill(midArmsLm(FEET_TOGETHER)),
+      ...Array(6).fill(openArmsLm(FEET_TOGETHER)), // sadece kol açık, bacak kapalı
+      ...Array(6).fill(midArmsLm(FEET_TOGETHER)),
+      ...Array(6).fill(closedArmsLm(FEET_TOGETHER)),
+    ];
+    for (const lm of seq) {
+      t += 40;
+      for (const e of engine.step({ landmarks: lm, worldLandmarks: null }, t)) {
+        events.push(e);
+      }
+    }
+    expect(events.filter((e) => e.type === "rep")).toHaveLength(0);
+  });
+
+  it("FSM: kol + bacak birlikte açıp kapamak +1 SAYAR", () => {
+    const engine = createRepEngine(jumpingJack);
+    const events = [];
+    let t = 0;
+    // Tam tur: kapalı → yarı → açık(kol+bacak) → yarı → kapalı.
+    const seq = [
+      ...Array(6).fill(closedArmsLm(FEET_TOGETHER)),
+      ...Array(6).fill(midArmsLm(FEET_APART)),
+      ...Array(6).fill(openArmsLm(FEET_APART)), // gerçek jumping jack: kol+bacak açık
+      ...Array(6).fill(midArmsLm(FEET_APART)),
+      ...Array(6).fill(closedArmsLm(FEET_TOGETHER)),
+    ];
+    for (const lm of seq) {
+      t += 40;
+      for (const e of engine.step({ landmarks: lm, worldLandmarks: null }, t)) {
+        events.push(e);
+      }
+    }
+    expect(events.filter((e) => e.type === "rep")).toHaveLength(1);
   });
 });
 

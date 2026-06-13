@@ -132,6 +132,16 @@ body,
   opacity: 0.8;
 }
 
+/* Süre-dozlu pose seti geri sayımı (örn. Jumping Jack 45 sn) — sağ üstte,
+   rep sayacının (sol üst) karşısında; rep-pop YOK (akan geri sayım). */
+.stage-count--time {
+  left: auto;
+  right: 28px;
+  animation: none;
+  color: var(--accent);
+  font-size: clamp(64px, 16vh, 132px);
+}
+
 /* Anlık form uyarısı — sahne altı, amber */
 .stage-warning {
   position: absolute;
