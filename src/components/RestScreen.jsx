@@ -65,8 +65,14 @@ export default function RestScreen({ rest, nextSlot, coach, onDone, paused = fal
 
   return (
     <section className="player rest">
-      <p className="player-position">Dinlenme</p>
-      <div className="rest-count" aria-live="off">
+      {/* UZAKTAN OKUNUR: büyük "DİNLEN" durumu + devasa sayı + son 3 sn accent. */}
+      <p className="rest-label">Dinlen</p>
+      <div
+        className={
+          left > 0 && left <= 3 ? "rest-count rest-count--ending" : "rest-count"
+        }
+        aria-live="off"
+      >
         {Math.max(0, left)}
       </div>
       {nextSlot && (

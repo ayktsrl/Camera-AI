@@ -44,6 +44,7 @@ export const plank = {
   name: "Plank",
   isometric: true, // ← holdEngine yolu (rep FSM DEĞİL)
   cameraHint: "Kamera: yandan, tüm gövde karede (~2 m)",
+  framing: "full", // yatay tüm-gövde + kalça hattı → tüm gövde karede
 
   // İzometrik tutuş eşikleri (rep "phases" YERİNE) — holdEngine bunları okur.
   // Anlam: horizontalMinTilt = yatay kabul açısı (90 = tam yatay); straightEnter/Exit =

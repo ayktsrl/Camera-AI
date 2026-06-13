@@ -48,6 +48,7 @@ export const pushup = {
   id: "pushup",
   name: "Push Up",
   cameraHint: "Kamera: yandan, tüm gövde karede (~2 m)",
+  framing: "full", // yatay tüm-gövde hattı (bodyLine, neckLine) → tüm gövde karede
 
   // Rep FSM: faz kararı DİRSEK açısından sürülür (squat'ta diz idi).
   // Üstte (kollar düz) ≈ 170°+ → "standing"; dipte (göğüs aşağı) ≤ 95° → "bottom".

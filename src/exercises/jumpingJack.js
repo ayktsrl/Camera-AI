@@ -99,6 +99,7 @@ export const jumpingJack = {
   id: "jumpingJack",
   name: "Jumping Jack",
   cameraHint: "Kamera: önden, ~2.5 m (tüm vücut görünür)",
+  framing: "full", // bacak açıklığı oranı → tüm vücut
 
   // Rep FSM: faz, closedAngle (= 180 - abduction) ile sürülür.
   // Kapalı (eller yanda) → closedAngle yüksek → "standing".

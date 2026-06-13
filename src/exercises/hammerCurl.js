@@ -76,6 +76,7 @@ export const hammerCurl = {
   id: "hammerCurl",
   name: "Dumbbell Hammer Curl",
   cameraHint: "Kamera: yandan, ~2 m (dirsek sabitliği yan profilden ölçülür)",
+  framing: "upper", // omuz/dirsek/bilek + üst kol dikeyi; bacak gereksiz → yakın durabilir
 
   // Rep FSM: faz DİREKT dirsek açısından sürülür (squat deseni).
   // Açık ≈ 160° → "standing"; bükük ≈ 50° → "bottom".

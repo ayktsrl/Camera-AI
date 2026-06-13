@@ -104,6 +104,7 @@ export const lunge = {
   id: "lunge",
   name: "Lunge",
   cameraHint: "Kamera: yandan, ~2 m (diz-ayak ucu yan profilden ölçülür)",
+  framing: "full", // diz-ayak ucu + derinlik → tüm vücut
 
   // Rep FSM: faz AKTİF (daha bükük) bacağın diz açısından sürülür.
   // Ayakta (her iki bacak düz) ≈ 160°+ → "standing"; dipte ön diz ≤ 95° → "bottom".

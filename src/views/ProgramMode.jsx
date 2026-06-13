@@ -48,6 +48,7 @@ function dayPreviewExercises(day) {
 const STORAGE_KEYS = {
   voice: "formcoach_voice_v1",
   repVoice: "formcoach_rep_voice_v1", // tekrar sayımı sesi (varsayılan açık)
+  camera: "formcoach_camera_facing_v1", // "user" | "environment" — ön/arka kamera
   history: "formcoach_program_history_v1", // { [dayId]: ISO tarih } — son tamamlanma
 };
 
@@ -80,6 +81,35 @@ export default function ProgramMode({ onExit }) {
   useEffect(() => {
     writeStored(STORAGE_KEYS.repVoice, repVoiceOn);
   }, [repVoiceOn]);
+
+  // Kamera yönü — ön (user) / arka (environment). Arka kamera + ses = ekranı
+  // görmeden çalışma (uzaktan kullanım). Seçim localStorage'da kalır.
+  const [facingMode, setFacingMode] = useState(() =>
+    readStored(STORAGE_KEYS.camera, "user")
+  );
+  useEffect(() => {
+    writeStored(STORAGE_KEYS.camera, facingMode);
+  }, [facingMode]);
+
+  // Birden fazla kamera var mı — yoksa çevir düğmesi gizlenir (masaüstü tek kamera).
+  const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    async function detect() {
+      try {
+        if (!navigator.mediaDevices?.enumerateDevices) return;
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cams = devices.filter((d) => d.kind === "videoinput");
+        if (!cancelled) setHasMultipleCameras(cams.length > 1);
+      } catch {
+        /* tespit başarısız → düğme gizli kalır (zararsız) */
+      }
+    }
+    detect();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // session: mutable akış motoru (stabil nesne); playerState: render snapshot'ı.
   const [session, setSession] = useState(null);
@@ -332,6 +362,7 @@ export default function ProgramMode({ onExit }) {
         coach={coach}
         paused={paused}
         onDone={handleAdvancePhase}
+        facingMode={facingMode}
       />
     );
   } else if (playerState.status === "countdown") {
@@ -359,6 +390,7 @@ export default function ProgramMode({ onExit }) {
         onComplete={handleCompleteSet}
         paused={paused}
         handsFree={playerState.handsFree}
+        facingMode={facingMode}
       />
     ) : poseReady ? (
       <PoseSetScreen
@@ -369,6 +401,7 @@ export default function ProgramMode({ onExit }) {
         repVoice={repVoiceOn}
         paused={paused}
         handsFree={playerState.handsFree}
+        facingMode={facingMode}
       />
     ) : (
       <GuidedSetScreen
@@ -410,6 +443,20 @@ export default function ProgramMode({ onExit }) {
           >
             {repVoiceOn ? "Sayım açık" : "Sayım kapalı"}
           </button>
+          {/* Ön/arka kamera çevir — yalnız birden fazla kamera varsa görünür
+              (masaüstü tek kamerada gizli). Arka kamera + ses = ekransız çalışma. */}
+          {hasMultipleCameras && (
+            <button
+              type="button"
+              className="mode"
+              onClick={() =>
+                setFacingMode((f) => (f === "user" ? "environment" : "user"))
+              }
+              title="Ön/arka kamerayı değiştir"
+            >
+              {facingMode === "user" ? "Ön kamera" : "Arka kamera"}
+            </button>
+          )}
           <button
             type="button"
             className="mode"

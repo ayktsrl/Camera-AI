@@ -12,6 +12,7 @@ import { EXERCISES, getExercise } from "../exercises";
 const STORAGE_KEYS = {
   voice: "formcoach_voice_v1",
   exercise: "formcoach_exercise_v1",
+  camera: "formcoach_camera_facing_v1", // ön/arka kamera (Program Modu ile paylaşılır)
 };
 
 const MOTIVATION_AFTER_MS = 9000;
@@ -36,6 +37,12 @@ export default function FreeMode({ onOpenProgram, onOpenCalibration }) {
     readStored(STORAGE_KEYS.exercise, "squat")
   );
 
+  // Ön/arka kamera — Program Modu ile aynı localStorage anahtarı.
+  const [facingMode, setFacingMode] = useState(() =>
+    readStored(STORAGE_KEYS.camera, "user")
+  );
+  const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
+
   const exercise = getExercise(exerciseId);
 
   useEffect(() => {
@@ -46,6 +53,28 @@ export default function FreeMode({ onOpenProgram, onOpenCalibration }) {
   useEffect(() => {
     writeStored(STORAGE_KEYS.exercise, exerciseId);
   }, [exerciseId]);
+
+  useEffect(() => {
+    writeStored(STORAGE_KEYS.camera, facingMode);
+  }, [facingMode]);
+
+  // Birden fazla kamera tespiti — yoksa çevir düğmesi gizli.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!navigator.mediaDevices?.enumerateDevices) return;
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cams = devices.filter((d) => d.kind === "videoinput");
+        if (!cancelled) setHasMultipleCameras(cams.length > 1);
+      } catch {
+        /* tespit başarısız → gizli kalır */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleCoachEvent = useCallback((event) => {
     const coach = coachRef.current;
@@ -74,6 +103,7 @@ export default function FreeMode({ onOpenProgram, onOpenCalibration }) {
     videoRef,
     canvasRef,
     onFrame: processFrame,
+    facingMode,
   });
 
   // Tekrarlar arası süre belirgin uzarsa motivasyon.
@@ -120,7 +150,7 @@ export default function FreeMode({ onOpenProgram, onOpenCalibration }) {
 
   return (
     <div className="app">
-      <main className="stage">
+      <main className={facingMode === "user" ? "stage stage--mirrored" : "stage"}>
         <video ref={videoRef} className="stage-video" />
         <canvas ref={canvasRef} className="stage-canvas" />
 
@@ -277,6 +307,18 @@ export default function FreeMode({ onOpenProgram, onOpenCalibration }) {
           >
             {voiceOn ? "Ses açık" : "Ses kapalı"}
           </button>
+          {hasMultipleCameras && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() =>
+                setFacingMode((f) => (f === "user" ? "environment" : "user"))
+              }
+              title="Ön/arka kamerayı değiştir"
+            >
+              {facingMode === "user" ? "Ön kamera" : "Arka kamera"}
+            </button>
+          )}
           {onOpenCalibration && (
             <button
               type="button"

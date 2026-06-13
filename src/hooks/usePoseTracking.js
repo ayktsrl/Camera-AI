@@ -31,7 +31,7 @@ const MIN_RELIABLE_POINTS = 8;
  * @param {(frame: {activeTrack, tracks, timestamp}) => void} params.onFrame
  *   Her frame'de çağrılır (aktif kullanıcı yoksa activeTrack null).
  */
-export function usePoseTracking({ videoRef, canvasRef, onFrame }) {
+export function usePoseTracking({ videoRef, canvasRef, onFrame, facingMode = "user" }) {
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [errorMessage, setErrorMessage] = useState("");
   const [personCount, setPersonCount] = useState(0);
@@ -177,7 +177,10 @@ export function usePoseTracking({ videoRef, canvasRef, onFrame }) {
 
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: "user",
+            // Ön (user) / arka (environment) kamera — owner uzaktan kullanımda
+            // arka kamera + ses ile ekranı görmeden çalışabilir. Sadece kaynak
+            // seçimi; landmark/motor mantığı ham koordinatla çalışır (etkilenmez).
+            facingMode,
             width: { ideal: 1280 },
             height: { ideal: 720 },
           },
@@ -219,7 +222,7 @@ export function usePoseTracking({ videoRef, canvasRef, onFrame }) {
       if (stream) stream.getTracks().forEach((t) => t.stop());
       landmarker?.close?.();
     };
-  }, [videoRef, canvasRef]);
+  }, [videoRef, canvasRef, facingMode]);
 
   return { status, errorMessage, personCount, hasActiveUser };
 }

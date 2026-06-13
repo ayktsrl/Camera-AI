@@ -82,6 +82,7 @@ export const shoulderPress = {
   id: "shoulderPress",
   name: "Dumbbell Shoulder Press",
   cameraHint: "Kamera: önden veya 45°, ~2.5 m (kol yukarı uzanışı görünür)",
+  framing: "upper", // omuz/kol yukarı uzanış; bacak gereksiz → yakın durabilir
 
   // Rep FSM: faz, pressDownAngle (= 180 - dirsek açısı) ile sürülür.
   // Omuzda bükük → pressDownAngle yüksek → "standing".

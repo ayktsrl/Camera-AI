@@ -64,6 +64,7 @@ export const lateralRaise = {
   id: "lateralRaise",
   name: "Dumbbell Lateral Raise",
   cameraHint: "Kamera: önden veya 45°, ~2.5 m (kol yana kalkışı görünür)",
+  framing: "upper", // omuz/kol yana kalkış; bacak gereksiz → kullanıcı yakın durabilir
 
   // Rep FSM: faz, loweredAngle (= 180 - abduction) ile sürülür.
   // Kol aşağı (yanda) → loweredAngle yüksek → "standing".

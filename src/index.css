@@ -60,7 +60,15 @@ body,
   inset: 0;
   width: 100%;
   height: 100%;
-  transform: scaleX(-1); /* ayna — kullanıcı kendini doğal görür */
+}
+
+/* Ön kamera (user): ayna — kullanıcı kendini doğal görür.
+   Arka kamera (environment): ayna YOK (dünya zaten doğru). Sınıf, facingMode'a
+   göre bileşende toggle edilir; sadece görsel transform — landmark mantığını
+   ETKİLEMEZ (canvas da aynı transform'u alır, iskelet videoyla hizalı kalır). */
+.stage--mirrored .stage-video,
+.stage--mirrored .stage-canvas {
+  transform: scaleX(-1);
 }
 
 .stage-video {
@@ -158,11 +166,12 @@ body,
   display: inline-flex;
   align-items: center;
   gap: 0.4em;
-  padding: 10px 18px;
+  padding: 12px 22px;
   border-radius: 999px;
-  font-size: clamp(15px, 2.2vh, 20px);
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  /* UZAKTAN OKUNUR durum — büyütüldü (owner 2-3 m'den "algılanıyor/duraklatıldı" görür). */
+  font-size: clamp(22px, 3.4vh, 40px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
   white-space: nowrap;
   backdrop-filter: blur(6px);
   transition: background 200ms ease, color 200ms ease;
@@ -179,7 +188,7 @@ body,
   background: rgba(19, 21, 18, 0.72);
   color: var(--warn);
   border: 1px solid rgba(230, 168, 79, 0.5);
-  font-size: clamp(17px, 2.6vh, 24px);
+  font-size: clamp(24px, 3.8vh, 44px);
   animation: warning-in 240ms ease-out;
 }
 
@@ -188,13 +197,14 @@ body,
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 32px;
+  bottom: 28px;
   text-align: center;
-  font-size: clamp(22px, 3.4vh, 34px);
-  font-weight: 500;
+  /* UZAKTAN OKUNUR form uyarısı — büyük + renkli, güçlü gölge (kamera üstü okunur). */
+  font-size: clamp(28px, 5vh, 56px);
+  font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--warn);
-  text-shadow: 0 1px 16px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.85);
   animation: warning-in 240ms ease-out;
   pointer-events: none;
 }
@@ -202,6 +212,52 @@ body,
 /* Kritik kurallar (örn. diz valgus) — daha sıcak ton, aynı tipografi */
 .stage-warning--critical {
   color: var(--critical);
+}
+
+/* ---- Yerleştirme asistanı (sahne üstü, set başı) ---- */
+/* Owner ekrana BAKMADAN yerleşsin: büyük ipucu + yön; "ok" → kısa yeşil "hazır". */
+.placement {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  padding: 24px;
+  background: rgba(19, 21, 18, 0.42);
+  pointer-events: none;
+}
+
+.placement-hint {
+  font-size: clamp(24px, 4vh, 44px);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--paper);
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.85);
+  max-width: 18ch;
+}
+
+.placement-arrow {
+  font-size: clamp(48px, 9vh, 110px);
+  line-height: 1;
+  color: var(--accent);
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.7);
+}
+
+.placement--ok {
+  background: rgba(74, 222, 128, 0.1);
+}
+
+.placement--ok .placement-hint {
+  color: #4ade80;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .placement--ok {
+    animation: warning-in 240ms ease-out;
+  }
 }
 
 @keyframes warning-in {
@@ -917,7 +973,19 @@ body,
 .announce-hint {
   margin-top: 18px;
   color: var(--muted);
-  font-size: 14px;
+  font-size: clamp(15px, 2.4vh, 22px);
+}
+
+/* Set başı kamera önizleme + yerleştirme asistanı (ANNOUNCE/COUNTDOWN). Owner
+   pozisyona geçerken kadrajı görür; asistan sesle yönlendirir. Kompakt 16:9. */
+.placement-stage {
+  position: relative;
+  margin: 22px auto 0;
+  width: min(100%, 480px);
+  aspect-ratio: 16 / 9;
+  background: #000;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
 }
 
 .countdown-stage {
@@ -1009,10 +1077,52 @@ body,
   overflow: hidden;
 }
 
+/* UZAKTAN OKUNUR: rep sayacı sahnenin büyük kısmı — 2-3 m'den okunur.
+   Owner ekrana yakın değil; rakam ekranın hâkimi (tek büyük bilgi, kutu yok).
+   Dikey orta-üst yerleşim (top ile — rep-pop transform: scale ile çakışmasın). */
 .player-stage .stage-count {
-  font-size: clamp(72px, 14vh, 140px);
-  top: 6px;
-  left: 20px;
+  font-size: clamp(120px, 30vh, 260px);
+  top: 22%;
+  left: 28px;
+}
+.player-stage .stage-count--time {
+  top: 22%;
+  left: auto;
+  right: 28px;
+  font-size: clamp(96px, 24vh, 200px);
+}
+
+/* Hedef göstergesi — rep sayacının altına küçük "/ hedef" (ne kadar kaldı). */
+.stage-count-target {
+  display: block;
+  font-size: 0.22em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-top: 0.06em;
+}
+
+/* UZAKTAN OKUNUR: plank faz durumu ("Pozisyonu düzelt" / "Plank pozisyonuna geç")
+   sahne içi büyük metin — uzaktan "düzelt" okunur. */
+.player-stage .stage-notice {
+  font-size: clamp(22px, 3.6vh, 40px);
+  font-weight: 600;
+  color: var(--paper);
+}
+
+/* Sahne üst şeridi: aktif hareket adı — uzaktan ne yaptığını okur. */
+.stage-exercise-name {
+  position: absolute;
+  top: 14px;
+  left: 28px;
+  right: 28px;
+  font-size: clamp(20px, 4vh, 32px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--paper);
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
 }
 
 .player-pose-panel {
@@ -1036,17 +1146,34 @@ body,
   margin-top: 64px;
 }
 
+/* UZAKTAN OKUNUR: "DİNLEN" büyük etiket — 2-3 m'den durum okunur. */
+.rest-label {
+  margin: 0 0 6px;
+  font-size: clamp(28px, 5vh, 48px);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
 .rest-count {
   font-size: clamp(120px, 28vh, 240px);
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--paper);
+  transition: color 200ms ease;
+}
+
+/* Son 3 sn accent (sesli bip'e görsel eşlik). */
+.rest-count--ending {
+  color: var(--accent);
 }
 
 .rest-next {
   margin: 24px 0 0;
-  font-size: 16px;
+  /* UZAKTAN OKUNUR: sıradaki hareket adı büyütüldü. */
+  font-size: clamp(18px, 3vh, 28px);
   color: var(--muted);
 }
 

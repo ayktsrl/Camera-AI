@@ -56,6 +56,7 @@ export const kneeRaise = {
   id: "kneeRaise",
   name: "Standing Knee Raise",
   cameraHint: "Kamera: önden veya 45°, ~2.5 m",
+  framing: "full", // diz yükselişi → tüm vücut
 
   // Rep FSM: faz AKTİF (daha bükük) bacağın kalça açısından sürülür.
   // Ayakta düz ≈ 175° → "standing"; diz kalça hizasında ≈ 90° → "bottom".

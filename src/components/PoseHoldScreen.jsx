@@ -27,6 +27,7 @@ export default function PoseHoldScreen({
   onComplete,
   paused = false,
   handsFree = false,
+  facingMode = "user",
 }) {
   const { exercise, block } = slot;
   const exerciseDef = getExercise(exercise.ruleSetRef);
@@ -72,6 +73,7 @@ export default function PoseHoldScreen({
     videoRef,
     canvasRef,
     onFrame: processFrame,
+    facingMode,
   });
 
   // Kamera hazır olunca set otomatik başlar.
@@ -146,9 +148,22 @@ export default function PoseHoldScreen({
 
   return (
     <section className="player player--pose">
-      <div className="stage player-stage">
+      <div
+        className={
+          facingMode === "user"
+            ? "stage player-stage stage--mirrored"
+            : "stage player-stage"
+        }
+      >
         <video ref={videoRef} className="stage-video" />
         <canvas ref={canvasRef} className="stage-canvas" />
+
+        {/* UZAKTAN OKUNUR: aktif hareket adı sahne üst şeridinde. */}
+        {running && (
+          <p className="stage-exercise-name" aria-hidden="true">
+            {exercise.name}
+          </p>
+        )}
 
         {stageNotice && (
           <div className="stage-notice">

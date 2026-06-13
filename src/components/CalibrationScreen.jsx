@@ -111,7 +111,7 @@ export default function CalibrationScreen({ onExit, initialExerciseId = "squat" 
 
   return (
     <div className="app app--calibrate">
-      <main className="stage">
+      <main className="stage stage--mirrored">
         <video ref={videoRef} className="stage-video" />
         <canvas ref={canvasRef} className="stage-canvas" />
 

@@ -76,6 +76,9 @@ export const squat = {
   id: "squat",
   name: "Squat",
   cameraHint: "Kamera: 45° çapraz, ~2 m",
+  // Kadraj gereksinimi — yerleştirme asistanı bunu okur. full = tüm vücut (diz/ayak
+  // bileği/topuk metrikleri gerekir, geri durulmalı); upper = üst vücut (daha yakın).
+  framing: "full",
 
   // Rep FSM yapılandırması (genel motor bunu okur): faz kararı diz açısından sürülür.
   tracking: {

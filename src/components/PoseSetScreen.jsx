@@ -25,6 +25,7 @@ export default function PoseSetScreen({
   repVoice = true,
   paused = false,
   handsFree = false,
+  facingMode = "user",
 }) {
   const { exercise, block } = slot;
   const exerciseDef = getExercise(exercise.ruleSetRef);
@@ -106,6 +107,7 @@ export default function PoseSetScreen({
     videoRef,
     canvasRef,
     onFrame: processFrame,
+    facingMode,
   });
 
   // Kamera hazır olunca set otomatik başlar.
@@ -236,9 +238,22 @@ export default function PoseSetScreen({
 
   return (
     <section className="player player--pose">
-      <div className="stage player-stage">
+      <div
+        className={
+          facingMode === "user"
+            ? "stage player-stage stage--mirrored"
+            : "stage player-stage"
+        }
+      >
         <video ref={videoRef} className="stage-video" />
         <canvas ref={canvasRef} className="stage-canvas" />
+
+        {/* UZAKTAN OKUNUR: aktif hareket adı sahne üst şeridinde. */}
+        {running && (
+          <p className="stage-exercise-name" aria-hidden="true">
+            {exercise.name}
+          </p>
+        )}
 
         {stageNotice && (
           <div className="stage-notice">
@@ -262,6 +277,10 @@ export default function PoseSetScreen({
         {running && (
           <div className="stage-count" key={repFlash} aria-label="Tekrar sayısı">
             {repCount}
+            {/* UZAKTAN OKUNUR: hedefle birlikte — ne kadar kaldığı okunur. */}
+            {target != null && (
+              <span className="stage-count-target">/ {target}</span>
+            )}
           </div>
         )}
 
@@ -292,7 +311,7 @@ export default function PoseSetScreen({
             role="status"
             aria-live="polite"
           >
-            {movementActive ? "✓ Algılanıyor" : "⏸ Hareket algılanmıyor — duraklatıldı"}
+            {movementActive ? "✓ ALGILANIYOR" : "⏸ DURAKLATILDI — HAREKET YOK"}
           </div>
         )}
       </div>
