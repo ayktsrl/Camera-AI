@@ -102,6 +102,16 @@ describe("keyframeKeyFor — hareket eşleme", () => {
     expect(keyframeKeyFor({ id: "db-hammer-curl-2" })).toBe("db-hammer-curl");
   });
 
+  it("ısınma takipli ruleSetRef (camelCase) ve standing-knee-raise id'sini eşler", () => {
+    // ruleSetRef camelCase → kebab-case keyframe anahtarı
+    expect(keyframeKeyFor({ ruleSetRef: "jumpingJack" })).toBe("jumping-jack");
+    expect(keyframeKeyFor({ ruleSetRef: "kneeRaise" })).toBe("knee-raise");
+    // program slot id'leri
+    expect(keyframeKeyFor({ id: "standing-knee-raise" })).toBe("knee-raise");
+    expect(keyframeKeyFor({ id: "standing-knee-raise-4" })).toBe("knee-raise");
+    expect(keyframeKeyFor({ id: "jumping-jack-4" })).toBe("jumping-jack");
+  });
+
   it("bilinmeyen → generic", () => {
     expect(keyframeKeyFor({ id: "plank" })).toBe("generic");
     expect(keyframeKeyFor({})).toBe("generic");

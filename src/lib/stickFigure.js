@@ -158,6 +158,20 @@ export const KEYFRAMES = {
     },
   ],
 
+  // Standing knee raise — önden: ayakta düz → bir diz kalça hizasına yukarı
+  // (uyluk yatay, baldır sarkık), diğer bacak basılı.
+  "knee-raise": [
+    STAND,
+    {
+      head: [50, 16],
+      shoulder: [50, 28],
+      hip: [50, 56],
+      // Sol bacak kalkık: diz kalça hizasında ileri/yukarı, ayak bileği sarkık.
+      knee: [38, 56],
+      ankle: [40, 72],
+    },
+  ],
+
   // Lateral raise — profil: kol aşağı (yanda) → kol omuz hizasında yana kalkık.
   "db-lateral-raise": [
     {
@@ -211,10 +225,18 @@ export function keyframeKeyFor(exercise) {
   const ref = exercise?.ruleSetRef;
   if (ref && KEYFRAMES[ref]) return ref;
 
+  // ruleSetRef (camelCase egzersiz id'si) → keyframe anahtarı (kebab-case) eşlemesi.
+  const REF_TO_KEY = { jumpingJack: "jumping-jack", kneeRaise: "knee-raise" };
+  if (ref && REF_TO_KEY[ref]) return REF_TO_KEY[ref];
+
   // library id eşlemesi (özel programdaki hareket id'si kökü "lunge-2" gibi olabilir)
   const id = exercise?.id || "";
-  for (const key of ["jumping-jack", "db-lateral-raise", "db-hammer-curl"]) {
+  for (const key of ["jumping-jack", "knee-raise", "db-lateral-raise", "db-hammer-curl"]) {
     if (id === key || id.startsWith(`${key}-`)) return key;
+  }
+  // "standing-knee-raise" id'si → knee-raise keyframe'i.
+  if (id === "standing-knee-raise" || id.startsWith("standing-knee-raise-")) {
+    return "knee-raise";
   }
   return "generic";
 }

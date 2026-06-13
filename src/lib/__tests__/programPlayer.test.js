@@ -353,7 +353,7 @@ describe("ownerProgram veri bütünlüğü (spec Ek-A)", () => {
     expect(closed.map((e) => e.id).sort()).toEqual(["lunge-lateral", "squat-press"]);
   });
 
-  it("P0 takip slotları: squat ailesi + push-up + lunge (Dalga 1+2'de P0'a terfi)", () => {
+  it("P0 takip slotları: squat ailesi + push-up + lunge + jumping jack + knee raise (Batch 2 aktivasyon)", () => {
     const all = ownerProgram.days.flatMap((d) =>
       d.blocks.flatMap((b) => b.exercises)
     );
@@ -362,13 +362,22 @@ describe("ownerProgram veri bütünlüğü (spec Ek-A)", () => {
       "barbell-squat",
       "bw-squat-warmup",
       "bw-squat-warmup-4",
+      "jumping-jack",
+      "jumping-jack-4",
       "lunge-lateral",
       "push-up",
       "squat-press",
+      "standing-knee-raise",
+      "standing-knee-raise-4",
     ]);
-    // squat ailesi squat motoruna, push-up pushup'a, lunge kendi motoruna bağlı.
+    // squat ailesi squat motoruna, push-up pushup'a, lunge kendi motoruna,
+    // jumping jack jumpingJack'e, knee raise kneeRaise motoruna bağlı (hepsi canlı).
     expect(
-      p0.every((e) => ["squat", "pushup", "lunge"].includes(e.ruleSetRef))
+      p0.every((e) =>
+        ["squat", "pushup", "lunge", "jumpingJack", "kneeRaise"].includes(
+          e.ruleSetRef
+        )
+      )
     ).toBe(true);
   });
 

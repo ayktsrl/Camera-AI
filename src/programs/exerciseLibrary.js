@@ -6,8 +6,10 @@
 //
 // SINIR: trackable === true olanlar pose form analizine GİRER (kameradan otomatik
 // tekrar sayımı). Şu an squat ailesi (ruleSetRef "squat"), push-up
-// (ruleSetRef "pushup") ve lunge (ruleSetRef "lunge") gerçek motora bağlıdır —
-// bu yüzden P0'da onlar takiplidir.
+// (ruleSetRef "pushup"), lunge (ruleSetRef "lunge"), jumping jack
+// (ruleSetRef "jumpingJack") ve standing knee raise (ruleSetRef "kneeRaise")
+// hepsi P0'da CANLI pose-takiplidir. lateralRaise / hammerCurl P2'de bekliyor
+// (motorları Batch 3'te gelecek, henüz canlı değil).
 // Diğer her şey "rehberli": kullanıcı kendi sayar, uyarı + önizleme verilir.
 // (Faz mantığı programPlayer.isPoseTracked ile aynı: trackable && ruleSetRef &&
 //  trackingPhase <= ACTIVE_TRACKING_PHASE.)
@@ -82,12 +84,23 @@ export const EXERCISE_LIBRARY = [
     id: "jumping-jack",
     name: "Jumping Jack",
     type: "bodyweight",
-    trackable: false,
-    trackingPhase: null,
-    ruleSetRef: null,
+    trackable: true,
+    trackingPhase: "P0",
+    ruleSetRef: "jumpingJack",
     defaultDose: { type: "time", seconds: 45 },
-    coachNote: null,
-    untrackableReason: "Hızlı tüm-vücut hareketi — pose çift sayma riski; süre bazlı uygundur.",
+    coachNote: "Kolları tam yukarı aç, tempoyu koru",
+    untrackableReason: null,
+  },
+  {
+    id: "standing-knee-raise",
+    name: "Standing Knee Raise",
+    type: "bodyweight",
+    trackable: true,
+    trackingPhase: "P0",
+    ruleSetRef: "kneeRaise",
+    defaultDose: { type: "perSide", value: 12 },
+    coachNote: "Dizini kalça hizasına kaldır, gövde dik kalsın",
+    untrackableReason: null,
   },
   {
     id: "mountain-climber",
