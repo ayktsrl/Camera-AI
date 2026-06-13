@@ -10,6 +10,7 @@ import {
   doseTargetSeconds,
   slotPositionLabel,
 } from "../lib/programPlayer";
+import ExercisePreview from "./ExercisePreview";
 
 export default function GuidedSetScreen({ slot, onComplete }) {
   const { exercise, block } = slot;
@@ -64,15 +65,8 @@ export default function GuidedSetScreen({ slot, onComplete }) {
       )}
       <p className="player-dose">{doseLabel(exercise.dose)}</p>
 
-      <div className="player-links">
-        <a
-          className="video-link"
-          href={exercise.videoUrl}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Video — YouTube
-        </a>
+      <div className="player-preview-row">
+        <ExercisePreview exercise={exercise} size="md" asLink />
       </div>
 
       {timeBased ? (

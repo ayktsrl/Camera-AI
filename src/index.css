@@ -534,14 +534,20 @@ body,
   border-bottom: 1px solid var(--hairline);
   width: 100%;
   display: flex;
-  align-items: baseline;
-  gap: 16px;
+  flex-direction: column;
+  gap: 12px;
   padding: 20px 2px;
   font-family: var(--font);
   color: var(--paper);
   text-align: left;
   cursor: pointer;
   transition: background 140ms ease;
+}
+
+.day-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
 }
 
 .day-row:hover {
@@ -641,6 +647,110 @@ body,
 .video-link:hover {
   color: var(--accent);
   border-bottom-color: var(--accent);
+}
+
+/* Hareket önizlemesi — 16:9 thumbnail, hairline çerçeve, hafif yuvarlak köşe.
+   Üç boyut: strip (gün satırı), sm (pose paneli), md (rehberli set ekranı). */
+.exercise-preview {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--ink-raise);
+  text-decoration: none;
+  position: relative;
+}
+
+.exercise-preview--strip {
+  width: 72px;
+}
+
+.exercise-preview--sm {
+  width: 96px;
+}
+
+.exercise-preview--md {
+  width: 132px;
+}
+
+.exercise-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Kırık resim ikonu yerine: nötr kireç-zemin baş harfi */
+.exercise-preview-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(200, 242, 78, 0.1);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+}
+
+/* Tek affordance — thumbnail + "▶ İzle" etiketi (md/sm linkli kullanımda) */
+.exercise-preview--link {
+  cursor: pointer;
+  transition: border-color 140ms ease;
+}
+
+.exercise-preview--link:hover {
+  border-color: var(--accent);
+}
+
+.exercise-preview--link:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.exercise-preview-play {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 3px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--paper);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.72), transparent);
+  text-align: center;
+}
+
+.exercise-preview--link:hover .exercise-preview-play {
+  color: var(--accent);
+}
+
+/* Rehberli set ekranı: önizleme satırı (eski .player-links yerine) */
+.player-preview-row {
+  margin-top: 18px;
+}
+
+/* Gün satırı önizleme şeridi */
+.day-preview-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Pose paneli: küçük önizleme adın yanında, kamerayı ezmez */
+.player-exercise-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.player-exercise-head .player-exercise {
+  flex: 1;
+  min-width: 0;
 }
 
 /* Elle tekrar girişi */

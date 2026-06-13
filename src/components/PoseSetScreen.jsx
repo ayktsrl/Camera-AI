@@ -11,6 +11,7 @@ import {
   doseTargetReps,
   slotPositionLabel,
 } from "../lib/programPlayer";
+import ExercisePreview from "./ExercisePreview";
 
 export default function PoseSetScreen({ slot, coach, onComplete }) {
   const { exercise, block } = slot;
@@ -135,7 +136,11 @@ export default function PoseSetScreen({ slot, coach, onComplete }) {
         <p className="player-position">
           {block.label} · {slotPositionLabel(slot)}
         </p>
-        <h2 className="player-exercise">{exercise.name}</h2>
+        <div className="player-exercise-head">
+          {/* Kamera ana sahne — önizleme küçük (sm) kalır, kamerayı ezmez. */}
+          <ExercisePreview exercise={exercise} size="sm" asLink />
+          <h2 className="player-exercise">{exercise.name}</h2>
+        </div>
         {exercise.coachNote && (
           <p className="coach-note">“{exercise.coachNote}”</p>
         )}
@@ -145,14 +150,6 @@ export default function PoseSetScreen({ slot, coach, onComplete }) {
         </p>
 
         <div className="player-links">
-          <a
-            className="video-link"
-            href={exercise.videoUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Video — YouTube
-          </a>
           <span className="meta-hint">Kamera: 45° çapraz, ~2 m</span>
         </div>
 

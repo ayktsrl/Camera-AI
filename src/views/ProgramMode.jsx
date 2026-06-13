@@ -16,6 +16,23 @@ import GuidedSetScreen from "../components/GuidedSetScreen";
 import PoseSetScreen from "../components/PoseSetScreen";
 import RestScreen from "../components/RestScreen";
 import DaySummary from "../components/DaySummary";
+import ExercisePreview from "../components/ExercisePreview";
+
+// Gün satırı için "ne yapacağım" önizleme şeridi: bloklardaki hareketleri
+// (aynı videoUrl tekrarını eleyerek) düzleştirir. Saf görsel — akışa dokunmaz.
+const PREVIEW_STRIP_MAX = 6;
+function dayPreviewExercises(day) {
+  const seen = new Set();
+  const out = [];
+  for (const block of day.blocks) {
+    for (const ex of block.exercises) {
+      if (seen.has(ex.videoUrl)) continue;
+      seen.add(ex.videoUrl);
+      out.push(ex);
+    }
+  }
+  return out;
+}
 
 const STORAGE_KEYS = {
   voice: "formcoach_voice_v1",
@@ -109,14 +126,27 @@ export default function ProgramMode({ onExit }) {
                 className="day-row"
                 onClick={() => startDay(day.id)}
               >
-                <span className="day-row-label">{day.label}</span>
-                <span className="day-row-meta">
-                  {day.suggestedDay} · {countDayExercises(day)} hareket · ~
-                  {estimateDayMinutes(day)} dk
+                <span className="day-row-head">
+                  <span className="day-row-label">{day.label}</span>
+                  <span className="day-row-meta">
+                    {day.suggestedDay} · {countDayExercises(day)} hareket · ~
+                    {estimateDayMinutes(day)} dk
+                  </span>
+                  {day.id === nextDayId && (
+                    <span className="day-next">sırada</span>
+                  )}
                 </span>
-                {day.id === nextDayId && (
-                  <span className="day-next">sırada</span>
-                )}
+                <span className="day-preview-strip" aria-hidden="true">
+                  {dayPreviewExercises(day)
+                    .slice(0, PREVIEW_STRIP_MAX)
+                    .map((ex) => (
+                      <ExercisePreview
+                        key={ex.id}
+                        exercise={ex}
+                        size="strip"
+                      />
+                    ))}
+                </span>
               </button>
             </li>
           ))}
