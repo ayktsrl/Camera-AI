@@ -38,6 +38,12 @@ const PHOTO_KEYS = new Set([
   "inverted-row",
   "calf-raise",
   "arm-circles",
+  // Foto-boşluk doldurma (2026-06-13): eksik/zayıf hareketlere bundle'lı görsel.
+  // NOT: pike-pushup geri alındı — handstand push-up yanlış demonstrasyondu,
+  // placeholder'a düşmesi için bilinçli olarak eklenmedi (bkz. photoKeyFor → null).
+  "hollow-hold",
+  "leg-swings",
+  "high-knees",
 ]);
 
 // ruleSetRef (camelCase egzersiz kural-seti anahtarı) → foto klasörü.
@@ -54,8 +60,10 @@ const REF_TO_KEY = {
   hammerCurl: "hammerCurl",
   shoulderPress: "shoulderPress",
   // Batch 2 takipli: mountain climber foto bundle'ı mevcut (free-exercise-db).
-  // hollowHold bundle YOK → eşleme eklenmez, placeholder'a düşer.
   mountainClimber: "mountain-climber",
+  // Foto-boşluk doldurma (2026-06-13): hollow hold artık kendi bundle'ına sahip
+  // (free-exercise-db "Scissor_Kick" — sırtüstü, bacaklar yerden, core hold pozu).
+  hollowHold: "hollow-hold",
 };
 
 // Library id (özel programda hareket id kökü) → foto klasörü.
@@ -79,6 +87,21 @@ const ID_TO_KEY = {
   "inverted-row": "inverted-row",
   "calf-raise": "calf-raise",
   "arm-circles": "arm-circles",
+  // Foto-boşluk doldurma (2026-06-13):
+  // pike-pushup BİLİNÇLİ OLARAK eşlenmedi — yanlış görsel (handstand push-up)
+  // geri alındı, doğru zemin-pike görseli bulunana dek placeholder gösterilir.
+  "leg-swings": "leg-swings",
+  "hollow-hold": "hollow-hold",
+  // high-knees aşağıda ID_OVERRIDE ile ele alınır (ruleSetRef "kneeRaise"
+  // paylaştığı için normal ID yolu ruleSetRef'e yenik düşer — bkz. photoKeyFor).
+};
+
+// ruleSetRef ÖNCELİĞİNİ EZEN id eşlemesi. Bazı hareketler bir motoru paylaşır
+// (örn. high-knees, kneeRaise ruleset'ini kullanır) ama KENDİ demonstrasyon
+// fotosu olmalı. Bu tablo photoKeyFor'da ruleSetRef kontrolünden ÖNCE bakılır.
+// id tam ya da "<gün öneki>-<base>" / "<base>-<sonek>" köküyle eşleşir.
+const ID_OVERRIDE = {
+  "high-knees": "high-knees",
 };
 
 /**
@@ -88,12 +111,23 @@ const ID_TO_KEY = {
  * @returns {string|null}
  */
 export function photoKeyFor(exercise) {
+  const id = exercise?.id || "";
+
+  // 0) ID ÖNCELİKLİ EZME — ruleSetRef'ten ÖNCE. high-knees gibi bir motoru
+  // paylaşan ama kendi fotosu olması gereken hareketler için (kök eşleşmesi de
+  // dahil: "cxB-high-knees" → "high-knees").
+  for (const baseId of Object.keys(ID_OVERRIDE)) {
+    if (id === baseId || id.startsWith(`${baseId}-`) || id.endsWith(`-${baseId}`)) {
+      const k = ID_OVERRIDE[baseId];
+      if (PHOTO_KEYS.has(k)) return k;
+    }
+  }
+
   const ref = exercise?.ruleSetRef;
   if (ref && REF_TO_KEY[ref] && PHOTO_KEYS.has(REF_TO_KEY[ref])) {
     return REF_TO_KEY[ref];
   }
 
-  const id = exercise?.id || "";
   // Tam id eşleşmesi
   if (ID_TO_KEY[id]) return ID_TO_KEY[id];
   // Kök eşleşmesi: özel programda hareket id'si "lunge-2" gibi köklenebilir;

@@ -214,11 +214,14 @@ describe("kalistenik program — foto eşleme", () => {
     expect(hasPhotos(byName("Masa/Bar Row"))).toBe(true);
     expect(hasPhotos(byName("Calf Raise"))).toBe(true);
     expect(hasPhotos(byName("Arm Circles"))).toBe(true);
-    // Batch 1: High Knees artık kneeRaise motorunu paylaşıyor → ruleSetRef üzerinden
-    // standing-knee-raise fotosunu devralır (placeholder yerine gerçek foto).
+    // Foto-boşluk doldurma (2026-06-13): High Knees artık kneeRaise'i paylaşsa da
+    // KENDİ fotosuna (high-knees klasörü) ID ezmesiyle eşlenir.
     expect(hasPhotos(byName("High Knees"))).toBe(true);
-    // Hâlâ fotosuz → placeholder'a düşer:
+    // Foto-boşluk doldurma (2026-06-13): eski placeholder'lar artık bundle'lı foto:
+    expect(hasPhotos(byName("Hollow Hold"))).toBe(true);
+    expect(hasPhotos(byName("Leg Swings"))).toBe(true);
+    // pike-pushup geri alındı (2026-06-13): yanlış handstand görseli kaldırıldı,
+    // doğru zemin-pike görseli bulunana dek placeholder (foto YOK).
     expect(hasPhotos(byName("Pike Push-Up"))).toBe(false);
-    expect(hasPhotos(byName("Hollow Hold"))).toBe(false);
   });
 });

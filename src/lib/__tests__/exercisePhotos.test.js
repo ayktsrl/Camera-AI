@@ -65,21 +65,54 @@ describe("exercisePhotos — graceful fallback (çöp adam DEĞİL)", () => {
   });
 });
 
-describe("exercisePhotos — kütüphane bütünlüğü", () => {
-  // Batch 2: hollow hold takipli oldu ama foto bundle'ı YOK (free-exercise-db'de yok) →
-  // bilinçli placeholder'a düşer (prompt: "hollow-hold yoksa placeholder"). Bu hareket
-  // dışında her takiplinin gerçek fotosu olmalı.
-  const NO_PHOTO_TRACKED = new Set(["hollowHold"]);
+describe("exercisePhotos — foto-boşluk doldurma (2026-06-13)", () => {
+  // Eksik/zayıf hareketlere bundle'lı gerçek görsel eklendi. Eşlemeler çözülmeli.
+  it("hollow hold artık kendi fotosuna eşlenir (eski placeholder kaldırıldı)", () => {
+    expect(photoKeyFor({ ruleSetRef: "hollowHold" })).toBe("hollow-hold");
+    expect(photoKeyFor({ id: "cxB-hollow-hold", ruleSetRef: "hollowHold" })).toBe(
+      "hollow-hold"
+    );
+  });
 
-  it("takipli (trackable + ruleSetRef) hareketlerin fotoğrafı vardır (placeholder istisnası dışında)", () => {
+  it("leg swings (rehberli, ruleSetRef'siz) kendi fotosuna eşlenir", () => {
+    expect(photoKeyFor({ id: "leg-swings" })).toBe("leg-swings");
+    expect(photoKeyFor({ id: "cxB-leg-swings" })).toBe("leg-swings");
+  });
+
+  it("pike push-up geri alındı — placeholder bekleniyor (handstand görseli yanlıştı)", () => {
+    // Yanlış demonstrasyon (handstand push-up) kaldırıldı; doğru zemin-pike
+    // görseli bulunana dek pike-pushup nötr placeholder'a düşer (null).
+    expect(photoKeyFor({ id: "pike-pushup" })).toBeNull();
+    expect(photoKeyFor({ id: "cxA-pike-pushup" })).toBeNull();
+  });
+
+  it("high-knees, kneeRaise motorunu paylaşsa da KENDİ fotosunu alır (ID ezme)", () => {
+    // ruleSetRef "kneeRaise" olmasına rağmen id ezmesi devreye girer.
+    expect(photoKeyFor({ id: "high-knees", ruleSetRef: "kneeRaise" })).toBe(
+      "high-knees"
+    );
+    expect(photoKeyFor({ id: "cxB-high-knees", ruleSetRef: "kneeRaise" })).toBe(
+      "high-knees"
+    );
+  });
+
+  it("standing knee raise high-knees'ten ayrı — kendi kneeRaise fotosunda kalır", () => {
+    expect(photoKeyFor({ id: "standing-knee-raise", ruleSetRef: "kneeRaise" })).toBe(
+      "kneeRaise"
+    );
+    expect(photoKeyFor({ id: "cxA-knee-raise", ruleSetRef: "kneeRaise" })).toBe(
+      "kneeRaise"
+    );
+  });
+});
+
+describe("exercisePhotos — kütüphane bütünlüğü", () => {
+  it("takipli (trackable + ruleSetRef) hareketlerin hepsinin fotoğrafı vardır", () => {
+    // Foto-boşluk doldurma sonrası: hollowHold dahil her takiplinin gerçek fotosu var.
     const tracked = EXERCISE_LIBRARY.filter((e) => e.trackable && e.ruleSetRef);
     expect(tracked.length).toBeGreaterThan(0);
     for (const ex of tracked) {
-      if (NO_PHOTO_TRACKED.has(ex.ruleSetRef)) {
-        expect(hasPhotos(ex)).toBe(false);
-      } else {
-        expect(hasPhotos(ex)).toBe(true);
-      }
+      expect(hasPhotos(ex)).toBe(true);
     }
   });
 });
