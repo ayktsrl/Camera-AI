@@ -1,7 +1,7 @@
 // Webcam + MediaPipe PoseLandmarker pipeline'ı.
 // Self-hosted wasm + model (public/mediapipe/wasm, public/models) — offline çalışır.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as mpVision from "../lib/vision_bundle.mjs";
 import {
   isPointReliable,
@@ -12,6 +12,7 @@ import {
   createTrackerState,
   updateTracks,
   selectActiveTrack,
+  resetLock,
 } from "../lib/tracking";
 import { createLandmarkSetFilter } from "../lib/oneEuro";
 import { drawPose, drawBoundingBox } from "../lib/drawing";
@@ -30,17 +31,35 @@ const MIN_RELIABLE_POINTS = 8;
  * @param {React.RefObject} params.canvasRef
  * @param {(frame: {activeTrack, tracks, timestamp}) => void} params.onFrame
  *   Her frame'de çağrılır (aktif kullanıcı yoksa activeTrack null).
+ * @param {() => void} [params.onLockAcquired] Kullanıcı kilidi ilk kazanıldığında
+ *   (registering/idle → locked) BİR KEZ çağrılır → "Seni tanıdım" sesli/görsel.
  */
-export function usePoseTracking({ videoRef, canvasRef, onFrame, facingMode = "user" }) {
+export function usePoseTracking({
+  videoRef,
+  canvasRef,
+  onFrame,
+  onLockAcquired,
+  facingMode = "user",
+}) {
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [errorMessage, setErrorMessage] = useState("");
   const [personCount, setPersonCount] = useState(0);
   const [hasActiveUser, setHasActiveUser] = useState(false);
+  const [lockPhase, setLockPhase] = useState("idle"); // idle | registering | locked
 
   const onFrameRef = useRef(onFrame);
+  const onLockAcquiredRef = useRef(onLockAcquired);
   useEffect(() => {
     onFrameRef.current = onFrame;
+    onLockAcquiredRef.current = onLockAcquired;
   });
+
+  // Kilidi sıfırla / yeniden tanıt — WorkoutHud "yeniden kilitle" + AnnounceScreen.
+  // En güncel tracker state'e ref ile erişir (loop dışından çağrılabilir).
+  const trackerStateRef = useRef(null);
+  const relock = useCallback(() => {
+    if (trackerStateRef.current) resetLock(trackerStateRef.current);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -48,11 +67,13 @@ export function usePoseTracking({ videoRef, canvasRef, onFrame, facingMode = "us
     let stream = null;
     let animationFrame = null;
     const trackerState = createTrackerState();
+    trackerStateRef.current = trackerState; // relock() bu state'e dokunur
     // Track başına One Euro filtre seti — 2D (çizim + topuk screen-y) ve
     // 3D world (açı metrikleri) ayrı kanallar. Track düşünce silinir (reset).
     const trackFilters = new Map();
     let lastActiveState = null;
     let lastCount = -1;
+    let lastLockPhase = "idle";
 
     function getTrackFilters(trackId) {
       let filters = trackFilters.get(trackId);
@@ -122,6 +143,8 @@ export function usePoseTracking({ videoRef, canvasRef, onFrame, facingMode = "us
       const confirmedTracks = tracks.filter((t) => t.isConfirmed);
       const activeTrack = selectActiveTrack(trackerState);
 
+      // SADECE kilitli (aktif) kullanıcının noktaları çizilir — drawPose
+      // activeTrackId dışındakileri zaten yok sayar (diğer kişiler görünmez).
       drawPose(
         ctx,
         confirmedTracks,
@@ -142,6 +165,17 @@ export function usePoseTracking({ videoRef, canvasRef, onFrame, facingMode = "us
       if (activeNow !== lastActiveState) {
         lastActiveState = activeNow;
         setHasActiveUser(activeNow);
+      }
+
+      // Kilit durum makinesi değişimi dışarı yansıtılır; kilit ilk kazanıldığında
+      // (→ locked) bir kez onLockAcquired ("Seni tanıdım").
+      const phase = trackerState.lockPhase;
+      if (phase !== lastLockPhase) {
+        if (phase === "locked" && lastLockPhase !== "locked") {
+          onLockAcquiredRef.current?.();
+        }
+        lastLockPhase = phase;
+        setLockPhase(phase);
       }
 
       onFrameRef.current?.({ activeTrack, tracks: confirmedTracks, timestamp });
@@ -221,8 +255,9 @@ export function usePoseTracking({ videoRef, canvasRef, onFrame, facingMode = "us
       if (animationFrame) cancelAnimationFrame(animationFrame);
       if (stream) stream.getTracks().forEach((t) => t.stop());
       landmarker?.close?.();
+      trackerStateRef.current = null;
     };
   }, [videoRef, canvasRef, facingMode]);
 
-  return { status, errorMessage, personCount, hasActiveUser };
+  return { status, errorMessage, personCount, hasActiveUser, lockPhase, relock };
 }

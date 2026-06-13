@@ -21,11 +21,34 @@ export default function WorkoutHud({
   onSkip,
   onToggleVoice,
   onExit,
+  lockPhase,
+  onRelock,
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false); // varsayılan KAPALI
 
   return (
     <>
+      {/* Kullanıcı kilidi göstergesi — kilit durumu görünür; tıkla → yeniden tanıt.
+          Sol üst köşe, cam-üstü hafif rozet. lockPhase verilmezse hiç gösterilmez
+          (PoseHoldScreen gibi kullanmayan ekranlar etkilenmez). */}
+      {lockPhase && onRelock && (
+        <button
+          type="button"
+          className={`lock-indicator lock-indicator--${lockPhase}`}
+          onClick={onRelock}
+          title="Yeniden tanıt / kilitle"
+        >
+          <span className="lock-indicator-dot" aria-hidden="true">●</span>
+          <span className="lock-indicator-label">
+            {lockPhase === "locked"
+              ? "Kilitli"
+              : lockPhase === "registering"
+                ? "Tanıyorum…"
+                : "Ekrana gel"}
+          </span>
+        </button>
+      )}
+
       {/* Cam-üstü kontrol grubu — sağ alt, yarı-saydam, hafif. Görüşü kapatmaz;
           yalnız bu öğe pointer-events alır (HUD bilgi katmanı tıklamayı yutmaz). */}
       <div className="hud-controls" role="group" aria-label="Antrenman kontrolleri">

@@ -123,12 +123,13 @@ export default function PoseSetScreen({
     onEvent: handleCoachEvent,
   });
 
-  const { status, errorMessage, hasActiveUser } = usePoseTracking({
-    videoRef,
-    canvasRef,
-    onFrame: processFrame,
-    facingMode,
-  });
+  const { status, errorMessage, hasActiveUser, lockPhase, relock } =
+    usePoseTracking({
+      videoRef,
+      canvasRef,
+      onFrame: processFrame,
+      facingMode,
+    });
 
   // Kamera hazır olunca set otomatik başlar.
   useEffect(() => {
@@ -364,6 +365,8 @@ export default function PoseSetScreen({
           onSkip={onSkip}
           onToggleVoice={onToggleVoice}
           onExit={onExit}
+          lockPhase={lockPhase}
+          onRelock={relock}
         />
       </div>
     </section>

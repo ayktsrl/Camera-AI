@@ -60,10 +60,16 @@ export default function AnnounceScreen({
     [pushFrame]
   );
 
-  usePoseTracking({
+  // Kilit ilk kazanıldığında SESLİ "Seni tanıdım" (bir kez).
+  const handleLockAcquired = useCallback(() => {
+    coach.announce("Seni tanıdım, kilitlendim", { interrupt: true });
+  }, [coach]);
+
+  const { lockPhase } = usePoseTracking({
     videoRef,
     canvasRef,
     onFrame: handleFrame,
+    onLockAcquired: handleLockAcquired,
     facingMode,
   });
 
@@ -101,15 +107,30 @@ export default function AnnounceScreen({
     return () => clearTimeout(timer);
   }, [paused, coach]);
 
-  // İlerleme şartı: anons bitti VE (kadraj ok VEYA emniyet süresi doldu).
+  // Kilit henüz yok (idle) iken nazik sesli "ekrana gel" (cooldown'lı — spam yok).
+  // registering/locked'da susar; emniyet süresinde (forceAdvance) susar.
+  useEffect(() => {
+    if (paused || forceAdvance) return;
+    if (lockPhase === "idle") {
+      coach.say("Ekrana gel, seni tanıyayım", {
+        key: "lock-idle",
+        cooldownMs: 4000,
+      });
+    }
+  }, [lockPhase, paused, forceAdvance, coach]);
+
+  // İlerleme şartı: anons bitti VE kilitlendi VE (kadraj ok VEYA emniyet süresi doldu).
+  // Emniyet (PLACEMENT_MAX_WAIT_MS) kilitlenemese de akışı kurtarır (kuzey yıldızı).
+  // Tek kişi durumunda kilit hızlı → fark hissedilmez.
   useEffect(() => {
     if (paused || doneRef.current) return;
     if (!announceReady) return;
-    const placementOk = placement?.ok || forceAdvance;
+    const locked = lockPhase === "locked";
+    const placementOk = (locked && placement?.ok) || forceAdvance;
     if (!placementOk) return;
     doneRef.current = true;
     onDone();
-  }, [announceReady, placement, forceAdvance, paused, onDone]);
+  }, [announceReady, placement, forceAdvance, paused, lockPhase, onDone]);
 
   return (
     <section className="player player--announce">
@@ -141,7 +162,20 @@ export default function AnnounceScreen({
       >
         <video ref={videoRef} className="stage-video" />
         <canvas ref={canvasRef} className="stage-canvas" />
-        {placement && (
+        {/* Kilit durumu rozeti — owner kilidin oluştuğunu GÖRSÜN. */}
+        <div
+          className={`lock-badge lock-badge--${lockPhase}`}
+          role="status"
+          aria-live="polite"
+        >
+          {lockPhase === "locked"
+            ? "● KİLİTLİ"
+            : lockPhase === "registering"
+              ? "TANIYORUM…"
+              : "EKRANA GEL"}
+        </div>
+
+        {placement && lockPhase === "locked" && (
           <div
             className={placement.ok ? "placement placement--ok" : "placement"}
             role="status"
@@ -154,7 +188,11 @@ export default function AnnounceScreen({
       </div>
 
       <p className="announce-hint">
-        {placement?.ok ? "Hazır — başlıyoruz" : "Pozisyonunu al"}
+        {lockPhase !== "locked"
+          ? "Ekranın ortasına gel, seni tanıyayım"
+          : placement?.ok
+            ? "Hazır — başlıyoruz"
+            : "Pozisyonunu al"}
       </p>
     </section>
   );
