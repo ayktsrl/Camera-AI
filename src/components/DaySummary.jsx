@@ -2,6 +2,9 @@
 // (temiz/hatalı + kural ihlal dağılımı, serbest moddaki özet diliyle aynı)
 // ve genel kural hatırlatmaları (kardiyo 30/40 dk 110–130 bpm, plank).
 
+import { useEffect, useRef } from "react";
+import { sessionDone } from "../lib/coachLines";
+
 function setLine(entry) {
   if (entry.reps != null) return String(entry.reps);
   if (entry.seconds != null) return `${entry.seconds} sn`;
@@ -48,7 +51,16 @@ function aggregateForm(sets) {
   };
 }
 
-export default function DaySummary({ summary, onFinish }) {
+export default function DaySummary({ summary, onFinish, coach }) {
+  // Seans sonu — eyes-free KRİTİK: owner ekrana bakmadan bittiğini DUYAR.
+  // Bir kez söylenir (mount). coach yoksa (klasik kullanım) sessiz.
+  const spokenRef = useRef(false);
+  useEffect(() => {
+    if (spokenRef.current || !coach?.announce) return;
+    spokenRef.current = true;
+    coach.announce(sessionDone(summary.totalSets), { interrupt: true });
+  }, [coach, summary.totalSets]);
+
   return (
     <section className="day-summary">
       <p className="program-kicker">{summary.dayLabel}</p>

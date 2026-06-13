@@ -38,7 +38,10 @@ export function createCoach({ lang = "tr-TR" } = {}) {
   /**
    * Cooldown'lu konuşma. Aynı key cooldown süresi dolmadan tekrar söylenmez.
    */
-  function say(text, { key = text, cooldownMs = DEFAULT_COOLDOWN_MS } = {}) {
+  function say(
+    text,
+    { key = text, cooldownMs = DEFAULT_COOLDOWN_MS, interrupt = false } = {}
+  ) {
     if (!enabled || !supported) return;
 
     const now = Date.now();
@@ -46,7 +49,8 @@ export function createCoach({ lang = "tr-TR" } = {}) {
     if (now - last < cooldownMs) return;
     lastSpokenAt.set(key, now);
 
-    speak(text);
+    // Kritik uyarı (interrupt) kuyruğu keser → güvenlik hatası beklemez.
+    speak(text, { interrupt });
   }
 
   /** Tekrar sayısını söyler — kuyruğu keser, gecikmesiz. */

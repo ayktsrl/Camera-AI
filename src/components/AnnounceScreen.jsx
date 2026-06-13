@@ -19,6 +19,7 @@ import {
 import { usePoseTracking } from "../hooks/usePoseTracking";
 import { usePlacementCheck } from "../hooks/usePlacementCheck";
 import { getExercise } from "../exercises";
+import { POSTURE_HINT } from "../lib/framingCheck";
 import PosePreview from "./PosePreview";
 
 // Anons okunduktan sonra kullanıcı pozisyona geçsin diye minimum bekleme.
@@ -37,6 +38,7 @@ export default function AnnounceScreen({
   const target = doseTargetReps(exercise.dose);
   const exerciseDef = getExercise(exercise.ruleSetRef);
   const framing = exerciseDef.framing ?? "full";
+  const posture = POSTURE_HINT[framing] ?? POSTURE_HINT.full;
   const doneRef = useRef(false);
 
   const videoRef = useRef(null);
@@ -65,11 +67,14 @@ export default function AnnounceScreen({
     facingMode,
   });
 
-  // Sesli anons — bir kez. "Sıradaki: Push Up, 12 tekrar. <hoca notu>"
+  // Sesli anons — bir kez. "Sıradaki: Push Up, 12 tekrar. <hoca notu>. <duruş ipucu>"
+  // Eyes-free: duruş ipucu (telefonu dik tut / yakın durabilirsin) anonsa eklenir →
+  // owner ekrana bakmadan telefonu doğru kurar.
   useEffect(() => {
     const repPart = target != null ? `, ${target} tekrar` : "";
     const note = exercise.coachNote ? `. ${exercise.coachNote}` : "";
-    coach.announce(`Sıradaki: ${exercise.name}${repPart}${note}`, {
+    const posturePart = posture?.speech ? `. ${posture.speech}` : "";
+    coach.announce(`Sıradaki: ${exercise.name}${repPart}${note}${posturePart}`, {
       interrupt: true,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -122,6 +127,9 @@ export default function AnnounceScreen({
       {exercise.coachNote && (
         <p className="coach-note">“{exercise.coachNote}”</p>
       )}
+
+      {/* Duruş ipucu — telefonu nasıl kuracağı (portre/alçak açı vs. yakın dur). */}
+      {posture?.hint && <p className="posture-hint">{posture.hint}</p>}
 
       {/* Set başı kamera + yerleştirme asistanı — ekrana bakmadan yerleş. */}
       <div

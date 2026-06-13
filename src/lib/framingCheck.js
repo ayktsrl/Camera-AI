@@ -85,6 +85,21 @@ const STATUS_TEXT = {
   },
 };
 
+// Yerleştirme penceresinde bir kez söylenen DURUŞ ipucu (framing'e göre).
+// Eyes-free: owner ekrana bakmadan telefonu doğru kursun.
+//  - full  → portre + alçak açı, ayakta tüm vücut daha yakından sığar.
+//  - upper → bacak gerekmez, yakın durabilir.
+export const POSTURE_HINT = {
+  full: {
+    hint: "Telefonu dik tut, alçak açıyla yere yakın koy",
+    speech: "Telefonu dik tut ve alçak açıyla yere yakın koy",
+  },
+  upper: {
+    hint: "Üst vücut hareketi — yakın durabilirsin",
+    speech: "Üst vücut hareketi, yakın durabilirsin",
+  },
+};
+
 /** Güvenilir landmark grubu sayısı (görünürlük + presence). */
 function reliableCount(landmarks, indices) {
   let n = 0;

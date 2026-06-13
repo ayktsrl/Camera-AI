@@ -13,6 +13,12 @@ import {
   slotPositionLabel,
 } from "../lib/programPlayer";
 import { createActivityGate } from "../lib/activityGate";
+import {
+  repMilestone,
+  setDoneReps,
+  setDoneTimed,
+  warningSayOptions,
+} from "../lib/coachLines";
 import ExercisePreview from "./ExercisePreview";
 
 // >45 sn yokluk → TEK nazik sesli hatırlatma (owner kararı). Sonra sessiz.
@@ -79,11 +85,18 @@ export default function PoseSetScreen({
       }
       if (event.type === "rep") {
         if (repVoiceRef.current) coach.sayCount(event.count);
+        // Kalan-tekrar kilometre taşı — eyes-free için KRİTİK (sayım kapalı olsa da
+        // söylenir). Salonda her tekrarı saymak yerine hedefe yaklaşınca kalanı vurgular.
+        const milestone = repMilestone(event.count, target);
+        if (milestone) {
+          coach.say(milestone.speech, { key: milestone.key, cooldownMs: 1500 });
+        }
       } else if (event.type === "warning") {
-        coach.say(event.speech, { key: event.rule });
+        // Kritik form hatası (bel/diz güvenliği) öne çıkar; major/minor mevcut desende.
+        coach.say(event.speech, warningSayOptions(event));
       }
     },
-    [coach]
+    [coach, target]
   );
 
   const {
@@ -144,9 +157,12 @@ export default function PoseSetScreen({
     if (doneRef.current) return;
     doneRef.current = true;
     setRunning(false);
+    // Set bitti — eyes-free KRİTİK geçiş, asla sessiz kalmaz. Rep/süreyi de söyle.
+    const line = target != null ? setDoneReps(repCount) : setDoneTimed();
+    coach.announce(line, { interrupt: true });
     finishSet();
     setFinishing(true);
-  }, [finishSet]);
+  }, [finishSet, coach, target, repCount]);
 
   // Hedefe ulaşınca set otomatik biter (rep-dozlu).
   useEffect(() => {

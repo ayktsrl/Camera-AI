@@ -9,6 +9,7 @@ import { usePoseTracking } from "../hooks/usePoseTracking";
 import { useHoldCounter } from "../hooks/useHoldCounter";
 import { getExercise } from "../exercises";
 import { doseLabel, slotPositionLabel } from "../lib/programPlayer";
+import { setDoneHold, warningSayOptions } from "../lib/coachLines";
 import ExercisePreview from "./ExercisePreview";
 
 const ABSENCE_REMINDER_MS = 45000;
@@ -47,7 +48,8 @@ export default function PoseHoldScreen({
   const handleCoachEvent = useCallback(
     (event) => {
       if (event.type === "warning") {
-        coach.say(event.speech, { key: event.rule });
+        // Kritik form hatası (bel hattı vb.) öne çıkar; major/minor mevcut desende.
+        coach.say(event.speech, warningSayOptions(event));
       }
     },
     [coach]
@@ -107,9 +109,11 @@ export default function PoseHoldScreen({
     if (doneRef.current) return;
     doneRef.current = true;
     setRunning(false);
+    // Set bitti — eyes-free KRİTİK geçiş, asla sessiz kalmaz. Tutulan süreyi de söyle.
+    coach.announce(setDoneHold(heldSeconds), { interrupt: true });
     finishSet();
     setFinishing(true);
-  }, [finishSet]);
+  }, [finishSet, coach, heldSeconds]);
 
   // Hands-free: holdEngine "end" sinyali (pozisyon çok uzun bozuk) → set otomatik biter.
   useEffect(() => {

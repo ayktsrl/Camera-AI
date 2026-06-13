@@ -341,6 +341,7 @@ export default function ProgramMode({ onExit }) {
       <DaySummary
         summary={session.getDaySummary()}
         onFinish={exitToDays}
+        coach={coach}
       />
     );
   } else if (playerState.status === "rest") {
