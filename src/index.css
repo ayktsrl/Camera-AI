@@ -114,6 +114,24 @@ body,
   }
 }
 
+/* İzometrik tutuş sayacı (plank) — rep-pop YOK (yukarı sayan sabit timer).
+   Geçerli tutuşta accent rengi (süre akıyor); durunca soluk paper (durakladı). */
+.stage-count--hold {
+  animation: none;
+  color: rgba(244, 244, 241, 0.55); /* duraklamış: soluk */
+  transition: color 200ms ease;
+}
+.stage-count--hold.stage-count--holding {
+  color: var(--accent); /* süre akıyor */
+}
+.stage-count-unit {
+  font-size: 0.28em;
+  font-weight: 500;
+  margin-left: 0.12em;
+  letter-spacing: 0.02em;
+  opacity: 0.8;
+}
+
 /* Anlık form uyarısı — sahne altı, amber */
 .stage-warning {
   position: absolute;

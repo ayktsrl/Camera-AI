@@ -8,17 +8,26 @@ function setLine(entry) {
   return "—";
 }
 
-/** Pose setlerinin form toplamı: temiz/hatalı + kural bazında ihlal sayısı. */
+/**
+ * Pose setlerinin form toplamı: kural bazında ihlal sayısı + (rep setlerinde
+ * temiz/hatalı, izometrik setlerde toplam tutulan süre). İki tip ayrılır:
+ *  - rep summary  → { repCount, faultyCount, rules }
+ *  - hold summary → { heldSeconds, rules }   (plank)
+ */
 function aggregateForm(sets) {
   const poseSets = sets.filter((s) => s.summary != null);
   if (poseSets.length === 0) return null;
 
+  const isometric = poseSets.every((s) => s.summary.heldSeconds != null);
+
   let reps = 0;
   let faulty = 0;
+  let heldSeconds = 0;
   const ruleFires = new Map();
   for (const set of poseSets) {
-    reps += set.summary.repCount;
-    faulty += set.summary.faultyCount;
+    reps += set.summary.repCount ?? 0;
+    faulty += set.summary.faultyCount ?? 0;
+    heldSeconds += set.summary.heldSeconds ?? 0;
     for (const rule of set.summary.rules ?? []) {
       if (!rule.fires) continue;
       const prev = ruleFires.get(rule.id);
@@ -31,6 +40,8 @@ function aggregateForm(sets) {
     }
   }
   return {
+    isometric,
+    heldSeconds,
     clean: reps - Math.min(faulty, reps),
     faulty,
     rules: [...ruleFires.values()],
@@ -64,7 +75,9 @@ export default function DaySummary({ summary, onFinish }) {
               {form && (
                 <div className="summary-ex-form">
                   <span>
-                    Form: {form.clean} temiz · {form.faulty} hatalı
+                    {form.isometric
+                      ? `Toplam ${form.heldSeconds} sn tutuldu`
+                      : `Form: ${form.clean} temiz · ${form.faulty} hatalı`}
                   </span>
                   {form.rules.length > 0 && (
                     <ul className="summary-faults">

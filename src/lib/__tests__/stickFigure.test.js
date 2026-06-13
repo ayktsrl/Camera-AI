@@ -112,8 +112,14 @@ describe("keyframeKeyFor — hareket eşleme", () => {
     expect(keyframeKeyFor({ id: "jumping-jack-4" })).toBe("jumping-jack");
   });
 
+  it("Batch 4 plank: ruleSetRef ve library id 'plank' keyframe'ine eşler", () => {
+    expect(keyframeKeyFor({ ruleSetRef: "plank" })).toBe("plank");
+    expect(keyframeKeyFor({ id: "plank" })).toBe("plank");
+    expect(keyframeKeyFor({ id: "plank-d1" })).toBe("plank");
+  });
+
   it("bilinmeyen → generic", () => {
-    expect(keyframeKeyFor({ id: "plank" })).toBe("generic");
+    expect(keyframeKeyFor({ id: "kettlebell-swing" })).toBe("generic");
     expect(keyframeKeyFor({})).toBe("generic");
     expect(keyframeKeyFor(null)).toBe("generic");
   });

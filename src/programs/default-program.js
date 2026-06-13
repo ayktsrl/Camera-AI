@@ -7,6 +7,34 @@
 //
 // Şema dokümantasyonu: src/programs/SCHEMA.md
 
+// Kardiyo sonrası plank finisher'ı — generalRules.plank: haftada 3 gün, 3 set,
+// "durabildiğin kadar" (izometrik süre tutma, hold dozu). Pose-takipli (P0):
+// holdEngine geçerli plank pozisyonunu sayar, hipSag/hipPike form kurallarını uygular.
+// 3 antrenman gününe (day1/day2/day4) eklenir → haftada 3 gün kuralı.
+function plankFinisher(suffix) {
+  return {
+    type: "finisher",
+    label: "Bitiriş — Plank",
+    exercises: [
+      {
+        id: `plank-${suffix}`,
+        name: "Plank",
+        coachNote: "Kalça düşmesin, karın sık, omuz-kalça-ayak tek hat",
+        videoUrl: null,
+        embeddable: false,
+        sets: 3,
+        // İzometrik: sabit hedef yok ("durabildiğin kadar"); süre kaydedilir.
+        dose: { type: "hold" },
+        restSec: [30, 45],
+        trackable: true,
+        trackingPhase: "P0",
+        ruleSetRef: "plank",
+        untrackableReason: null,
+      },
+    ],
+  };
+}
+
 export const ownerProgram = {
   id: "owner-coach-2026-06",
   name: "Hoca Programı",
@@ -108,6 +136,7 @@ export const ownerProgram = {
             trackable: false, trackingPhase: null, ruleSetRef: null,
             untrackableReason: "Kablo istasyonuna yakın duruş + bilek detayı landmark çözünürlüğünün altında." },
         ]},
+        plankFinisher("d1"),
       ],
     },
     // ─────────────── ANTRENMAN 2 — Çarşamba ───────────────
@@ -187,6 +216,7 @@ export const ownerProgram = {
             trackable: false, trackingPhase: null, ruleSetRef: null,
             untrackableReason: "Statik esneme — süre sayacı yeterli." },
         ]},
+        plankFinisher("d2"),
       ],
     },
     // ─────────────── ANTRENMAN 3 — Perşembe ───────────────
@@ -343,6 +373,7 @@ export const ownerProgram = {
             sets: 2, dose: { type: "timeRange", minSec: 30, maxSec: 40 },
             trackable: false, trackingPhase: null, ruleSetRef: null, untrackableReason: "Statik esneme." },
         ]},
+        plankFinisher("d4"),
       ],
     },
   ],

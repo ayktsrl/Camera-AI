@@ -54,6 +54,7 @@ describe("exerciseLibrary — şema bütünlüğü", () => {
       "lateralRaise",
       "hammerCurl",
       "shoulderPress",
+      "plank",
     ];
     expect(tracked.every((e) => allowed.includes(e.ruleSetRef))).toBe(true);
     // Batch 2 aktivasyon dersi: takipli her hareket P0 (canlıda sayar).
@@ -69,6 +70,8 @@ describe("exerciseLibrary — şema bütünlüğü", () => {
     expect(tracked.some((e) => e.ruleSetRef === "lateralRaise")).toBe(true);
     expect(tracked.some((e) => e.ruleSetRef === "hammerCurl")).toBe(true);
     expect(tracked.some((e) => e.ruleSetRef === "shoulderPress")).toBe(true);
+    // Batch 4 izometrik: plank canlı P0 (holdEngine süre tutar)
+    expect(tracked.some((e) => e.ruleSetRef === "plank")).toBe(true);
   });
 });
 

@@ -43,7 +43,7 @@ Program > days[] > blocks[] > exercises[]
 
 | Alan | Tip | Açıklama |
 |---|---|---|
-| `type` | `"warmup" \| "superset" \| "straight" \| "stretch" \| "cardio"` | Akış tipini belirler |
+| `type` | `"warmup" \| "superset" \| "straight" \| "stretch" \| "cardio" \| "finisher"` | Akış tipini belirler. `finisher` straight gibi akar (plank bitiriş bloğu). |
 | `label` | string | `"Isınma"`, `"Superset A"`… |
 | `rounds` | number | Sadece superset — tur sayısı |
 | `restBetweenExercisesSec` | number | Sadece superset — superset içi geçişte dinlenme (hep 0) |
@@ -59,7 +59,7 @@ Program > days[] > blocks[] > exercises[]
 | `id` | string | Gün içinde benzersiz (aynı hareket farklı günde sonek alır: `band-pull-apart-3`) |
 | `name` | string | Görünen ad |
 | `coachNote` | string \| null | **HAM hoca cümlesi — KELİMESİ KELİMESİNE.** Kısaltılamaz, değiştirilemez. Kurala çevrilen uyarılar ayrıca ruleSet'te yaşar; not silinmez. UI'da adın altında tırnak içinde, set başında bir kez sesli okunur. |
-| `videoUrl` | string | Doğrulanmış YouTube linki (spec §1 — 16/16 eşleşme) |
+| `videoUrl` | string \| null | Doğrulanmış YouTube linki (spec §1 — 16/16 eşleşme). Plank finisher'da `null` (in-app çöp adam önizleme, dış link yok). |
 | `embeddable` | boolean | oEmbed 401 dönenler `false` (`Tc-9yvl5Zt8`, `0RAzZhXnsww`). P0 player'da hepsi yeni sekmede açılır. |
 | `sets` | number | Set sayısı (superset'te = `rounds`, tutarlılık için tekrarlanır) |
 | `dose` | Dose | Aşağıda |
@@ -77,7 +77,15 @@ Program > days[] > blocks[] > exercises[]
 { type: "time", seconds: 45 }               // 45 sn
 { type: "timeRange", minSec: 30, maxSec: 40 } // 30–40 sn
 { type: "perSide", value: 12 }              // sağ-sol 12'şer
+{ type: "hold" }                            // İZOMETRİK: "durabildiğin kadar" (plank)
+{ type: "hold", minSec: 30 }                // izometrik + en az süre ipucu
 ```
+
+**`hold` (izometrik):** Tekrar/geri-sayım YOK. Pozisyonu TUTMA hareketleri (plank).
+Pose-takipli (`ruleSetRef: "plank"`) olduğunda `holdEngine` geçerli pozisyondaki
+geçen SÜREYİ yukarı sayar, pozisyon bozulunca timer durur (geri gitmez). UI rep
+yerine yukarı-sayan hold timer + form uyarısı gösterir; set bittiğinde "X sn tuttun".
+`isIsometricDose(dose)` ile ayırt edilir — rep/time dozları etkilenmez.
 
 ## Dinlenme kuralları (iki seviyeli)
 

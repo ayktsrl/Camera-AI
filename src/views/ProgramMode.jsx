@@ -6,6 +6,7 @@ import { ownerProgram } from "../programs/default-program";
 import {
   createWorkoutSession,
   isPoseTracked,
+  isIsometricDose,
   countDayExercises,
   estimateDayMinutes,
 } from "../lib/programPlayer";
@@ -19,6 +20,7 @@ import {
 import { EXERCISES } from "../exercises";
 import GuidedSetScreen from "../components/GuidedSetScreen";
 import PoseSetScreen from "../components/PoseSetScreen";
+import PoseHoldScreen from "../components/PoseHoldScreen";
 import RestScreen from "../components/RestScreen";
 import DaySummary from "../components/DaySummary";
 import ExercisePreview from "../components/ExercisePreview";
@@ -347,7 +349,18 @@ export default function ProgramMode({ onExit }) {
     const poseReady =
       isPoseTracked(slot.exercise) &&
       EXERCISES.some((e) => e.id === slot.exercise.ruleSetRef);
-    content = poseReady ? (
+    // İzometrik (plank) → süre-tutma ekranı; diğer takipli → rep ekranı.
+    const isometric = poseReady && isIsometricDose(slot.exercise.dose);
+    content = isometric ? (
+      <PoseHoldScreen
+        key={`set-${playerState.slotIndex}`}
+        slot={slot}
+        coach={coach}
+        onComplete={handleCompleteSet}
+        paused={paused}
+        handsFree={playerState.handsFree}
+      />
+    ) : poseReady ? (
       <PoseSetScreen
         key={`set-${playerState.slotIndex}`}
         slot={slot}

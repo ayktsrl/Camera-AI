@@ -6,6 +6,7 @@ import {
   buildSlots,
   createWorkoutSession,
   isPoseTracked,
+  isIsometricDose,
   doseLabel,
   doseTargetReps,
   doseTargetSeconds,
@@ -251,6 +252,19 @@ describe("doz yardımcıları", () => {
     expect(doseLabel({ type: "time", seconds: 45 })).toBe("45 sn");
     expect(doseLabel({ type: "timeRange", minSec: 30, maxSec: 40 })).toBe("30–40 sn");
     expect(doseLabel({ type: "perSide", value: 12 })).toBe("12 + 12 (sağ/sol)");
+    // Batch 4 izometrik: hold dozu sabit hedefsiz ("durabildiğin kadar").
+    expect(doseLabel({ type: "hold" })).toBe("durabildiğin kadar tut");
+    expect(doseLabel({ type: "hold", minSec: 30 })).toBe("en az 30 sn tut");
+  });
+
+  it("izometrik doz ayrımı: yalnız hold tipi true (rep/time false)", () => {
+    expect(isIsometricDose({ type: "hold" })).toBe(true);
+    expect(isIsometricDose({ type: "time", seconds: 45 })).toBe(false);
+    expect(isIsometricDose({ type: "reps", value: 12 })).toBe(false);
+    expect(isIsometricDose(null)).toBe(false);
+    // hold dozunda süre/tekrar hedefi YOK (auto-bitirme holdEngine'e ait).
+    expect(doseTargetSeconds({ type: "hold" })).toBeNull();
+    expect(doseTargetReps({ type: "hold" })).toBeNull();
   });
 
   it("tekrar hedefi: reps→value, repRange→max, perSide→2×, süre→null", () => {
@@ -279,9 +293,10 @@ describe("doz yardımcıları", () => {
 // ---- owner program verisi — spec Ek-A bütünlük denetimi ----
 
 describe("ownerProgram veri bütünlüğü (spec Ek-A)", () => {
-  it("4 gün, kalem sayıları spec özet tablosuyla uyumlu (12+13+13+13)", () => {
+  it("4 gün, kalem sayıları + plank finisher (day1/2/4'e +1 plank)", () => {
     expect(ownerProgram.days).toHaveLength(4);
-    expect(ownerProgram.days.map(countDayExercises)).toEqual([12, 13, 13, 13]);
+    // Batch 4: day1/day2/day4'e kardiyo-sonrası plank finisher eklendi (haftada 3 gün).
+    expect(ownerProgram.days.map(countDayExercises)).toEqual([13, 14, 13, 14]);
   });
 
   it("her hareket zorunlu alanları taşır; rehberli↔takipli alan tutarlılığı", () => {
@@ -290,7 +305,10 @@ describe("ownerProgram veri bütünlüğü (spec Ek-A)", () => {
         for (const ex of block.exercises) {
           expect(ex.id).toBeTruthy();
           expect(ex.name).toBeTruthy();
-          expect(ex.videoUrl).toMatch(/^https:\/\/www\.youtube\.com\//);
+          // Plank finisher'ın dış linki yok (videoUrl null) — in-app çöp adam önizleme.
+          if (ex.videoUrl !== null) {
+            expect(ex.videoUrl).toMatch(/^https:\/\/www\.youtube\.com\//);
+          }
           expect(typeof ex.embeddable).toBe("boolean");
           expect(ex.sets).toBeGreaterThan(0);
           expect(ex.dose?.type).toBeTruthy();
@@ -349,11 +367,12 @@ describe("ownerProgram veri bütünlüğü (spec Ek-A)", () => {
     const all = ownerProgram.days.flatMap((d) =>
       d.blocks.flatMap((b) => b.exercises)
     );
-    const closed = all.filter((e) => e.embeddable === false);
+    // Yalnız videosu OLAN embed-kapalı kalemler (plank finisher'ın videosu yok).
+    const closed = all.filter((e) => e.embeddable === false && e.videoUrl != null);
     expect(closed.map((e) => e.id).sort()).toEqual(["lunge-lateral", "squat-press"]);
   });
 
-  it("P0 takip slotları: squat ailesi + push-up + lunge + jumping jack + knee raise + Batch 3 dumbbell (lateral/hammer)", () => {
+  it("P0 takip slotları: squat ailesi + push-up + lunge + jumping jack + knee raise + Batch 3 dumbbell + Batch 4 plank", () => {
     const all = ownerProgram.days.flatMap((d) =>
       d.blocks.flatMap((b) => b.exercises)
     );
@@ -368,6 +387,9 @@ describe("ownerProgram veri bütünlüğü (spec Ek-A)", () => {
       "jumping-jack-4",
       "light-db-lateral",
       "lunge-lateral",
+      "plank-d1",
+      "plank-d2",
+      "plank-d4",
       "push-up",
       "squat-press",
       "standing-knee-raise",
@@ -387,6 +409,7 @@ describe("ownerProgram veri bütünlüğü (spec Ek-A)", () => {
           "lateralRaise",
           "hammerCurl",
           "shoulderPress",
+          "plank",
         ].includes(e.ruleSetRef)
       )
     ).toBe(true);
@@ -412,8 +435,10 @@ describe("ownerProgram veri bütünlüğü (spec Ek-A)", () => {
     }
     expect(session.getState().status).toBe("done");
     // 12 hareket: ısınma 4 set + SS-A 12 + SS-B 8 + SS-C 12 = 36 set
-    expect(session.getDaySummary().totalSets).toBe(36);
-    expect(session.getDaySummary().exercises).toHaveLength(12);
+    // + Batch 4 plank finisher 3 set = 39 set
+    expect(session.getDaySummary().totalSets).toBe(39);
+    // 12 program hareketi + 1 plank finisher = 13 ayrı hareket
+    expect(session.getDaySummary().exercises).toHaveLength(13);
   });
 
   it("gün süre tahmini makul aralıkta", () => {

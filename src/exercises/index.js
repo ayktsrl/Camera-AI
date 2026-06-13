@@ -9,6 +9,7 @@ import { kneeRaise } from "./kneeRaise";
 import { lateralRaise } from "./lateralRaise";
 import { hammerCurl } from "./hammerCurl";
 import { shoulderPress } from "./shoulderPress";
+import { plank } from "./plank";
 
 export const EXERCISES = [
   squat,
@@ -19,6 +20,7 @@ export const EXERCISES = [
   lateralRaise,
   hammerCurl,
   shoulderPress,
+  plank,
 ];
 
 export function getExercise(id) {

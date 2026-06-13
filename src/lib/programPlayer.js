@@ -41,9 +41,20 @@ export function doseLabel(dose) {
       return `${dose.minSec}–${dose.maxSec} sn`;
     case "perSide":
       return `${dose.value} + ${dose.value} (sağ/sol)`;
+    case "hold":
+      // İzometrik tutuş — sabit hedef yok ("durabildiğin kadar").
+      return dose.minSec ? `en az ${dose.minSec} sn tut` : "durabildiğin kadar tut";
     default:
       return "";
   }
+}
+
+/**
+ * Doz izometrik (süre-tutma) mi? Plank gibi hareketler holdEngine yolundan geçer;
+ * UI rep yerine yukarı-sayan hold timer gösterir. Rep/time dozlarını ETKİLEMEZ.
+ */
+export function isIsometricDose(dose) {
+  return dose?.type === "hold";
 }
 
 /** Tekrar hedefi — pose otomatik bitirme ve rehberli giriş varsayılanı. */
@@ -61,7 +72,7 @@ export function doseTargetReps(dose) {
   }
 }
 
-/** Süre hedefi (sn) — time/timeRange dozları için. */
+/** Süre hedefi (sn) — time/timeRange dozları için. hold için hedef YOK (null). */
 export function doseTargetSeconds(dose) {
   if (!dose) return null;
   if (dose.type === "time") return dose.seconds;
@@ -152,9 +163,14 @@ export function estimateDayMinutes(day) {
   const slots = buildSlots(day);
   let seconds = 0;
   for (const slot of slots) {
-    const t = doseTargetSeconds(slot.exercise.dose);
-    const reps = doseTargetReps(slot.exercise.dose);
-    seconds += t != null ? t : (reps ?? 10) * 3; // ~3 sn/tekrar
+    const dose = slot.exercise.dose;
+    const t = doseTargetSeconds(dose);
+    const reps = doseTargetReps(dose);
+    if (isIsometricDose(dose)) {
+      seconds += dose.minSec ?? 45; // plank "durabildiğin kadar" ~45 sn varsay
+    } else {
+      seconds += t != null ? t : (reps ?? 10) * 3; // ~3 sn/tekrar
+    }
     seconds += slot.restAfterSec;
     seconds += 15; // geçiş/hazırlık payı
   }

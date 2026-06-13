@@ -57,8 +57,9 @@ describe("buildCustomProgram — şema geçerliliği", () => {
   });
 
   it("rehberli hareket untrackableReason taşır, ruleSetRef null", () => {
+    // mountain-climber rehberli (plank artık Batch 4'te takipli oldu).
     const program = buildCustomProgram({
-      items: [{ libraryId: "plank", sets: 3 }],
+      items: [{ libraryId: "mountain-climber", sets: 3 }],
     });
     const ex = program.days[0].blocks[0].exercises[0];
     expect(ex.trackable).toBe(false);
@@ -103,10 +104,20 @@ describe("buildCustomProgram — şema geçerliliği", () => {
   });
 
   it("süre bazlı hareket reps verilmese de doz korur", () => {
-    const p = buildCustomProgram({ items: [{ libraryId: "plank", sets: 3 }] });
+    // mountain-climber süre dozlu rehberli (plank artık izometrik hold dozlu).
+    const p = buildCustomProgram({ items: [{ libraryId: "mountain-climber", sets: 3 }] });
     const ex = p.days[0].blocks[0].exercises[0];
     expect(ex.dose.type).toBe("time");
     expect(ex.dose.seconds).toBeGreaterThan(0);
+  });
+
+  it("izometrik (plank) hold dozu reps verilmeden korunur → takipli P0", () => {
+    const p = buildCustomProgram({ items: [{ libraryId: "plank", sets: 3 }] });
+    const ex = p.days[0].blocks[0].exercises[0];
+    expect(ex.dose.type).toBe("hold");
+    expect(ex.trackable).toBe(true);
+    expect(ex.ruleSetRef).toBe("plank");
+    expect(isPoseTracked(ex)).toBe(true);
   });
 
   it("düzenleme: id verilirse korunur (üzerine yazma)", () => {

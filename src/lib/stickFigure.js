@@ -215,6 +215,31 @@ export const KEYFRAMES = {
     },
   ],
 
+  // Plank — yandan: gövde DÜZ YATAY hat (omuz-kalça-ayak tek çizgi), önkol yere
+  // dayalı. İzometrik tutuş → neredeyse statik; çok küçük nefes salınımı (gövde
+  // ~1px iner-kalkar). Rep gibi inip-kalkmaz; vurgu DÜZ HAT'tadır.
+  plank: [
+    {
+      head: [16, 39],
+      shoulder: [30, 45],
+      hip: [62, 45.5],
+      knee: [80, 46],
+      ankle: [94, 46.5],
+      elbow: [30, 60],
+      wrist: [22, 60],
+    },
+    {
+      // Nefes: gövde topluca ~1px aşağı; düz hat KORUNUR (sarkma/pike YOK).
+      head: [16, 40],
+      shoulder: [30, 46],
+      hip: [62, 46.5],
+      knee: [80, 47],
+      ankle: [94, 47.5],
+      elbow: [30, 60],
+      wrist: [22, 60],
+    },
+  ],
+
   // Generic — nötr "egzersiz": kol hafif iner-kalkar (takip-edilemez hareketler).
   generic: [
     {
@@ -258,6 +283,7 @@ export function keyframeKeyFor(exercise) {
     "db-lateral-raise",
     "db-hammer-curl",
     "db-shoulder-press",
+    "plank",
   ]) {
     if (id === key || id.startsWith(`${key}-`)) return key;
   }
@@ -279,9 +305,12 @@ export function staticFrame(exercise) {
   return frames[frames.length - 1];
 }
 
-/** Push-up gibi yatay düzlemde zemin çizgisi konumu farklı. */
+/** Yatay düzlem hareketlerinde zemin çizgisi konumu farklı (push-up / plank). */
 export function groundYFor(exercise) {
-  return keyframeKeyFor(exercise) === "pushup" ? 90 : 92;
+  const key = keyframeKeyFor(exercise);
+  if (key === "pushup") return 90;
+  if (key === "plank") return 64; // önkol/zemin hattı — yatay gövdenin hemen altı
+  return 92;
 }
 
 /** Bir döngünün (ileri) süresi — ms. Tam ping-pong = 2x. */
