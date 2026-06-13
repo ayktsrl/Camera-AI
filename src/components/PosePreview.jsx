@@ -1,138 +1,117 @@
-// İn-app hedef-poz önizlemesi — kendi ürettiğimiz inline SVG silüet.
-// Dış link / video / thumbnail YOK; offline + telif-temiz (owner: "link falan koyma").
-// Hareket başına basit iki-poz silüeti (tepe + dip), nötr çizgi-figür.
-// Bilinmeyen hareket → nötr "hareket" simgesi (figür ayakta).
+// İn-app hedef-poz önizlemesi — ANİMASYONLU çöp adam (stick figure) döngüsü.
+// Owner: "hareket önizlemesi lazım — çöp adam gibi basit bir şey bile hangi hareketi
+// yapacağımı gösterse yeterli." Statik silüet yerine inip-kalkan figür.
 //
-// Silüetler kasıtlı minimal: P0'da kullanıcının "ne yapacağını" anlaması yeter;
-// zengin iskelet animasyonu Dalga 2 kapsamında (spec §4 P1).
+// Saf SVG + requestAnimationFrame interpolasyon. Dış link / video / bağımlılık YOK,
+// offline + telif-temiz. Eklem koordinatları ve döngü mantığı src/lib/stickFigure.js'te
+// (salt görsel; pose/repEngine mantığına dokunmaz).
+//
+// Performans/erişilebilirlik:
+//  - prefers-reduced-motion → animasyon durur, statik orta kare gösterilir.
+//  - size="strip" (listeler/gün şeridi) → çok figür performansı için statik kalır.
+//  - rAF'te SVG attribute'ları doğrudan güncellenir (React re-render yok) → hafif;
+//    pose ekranındaki kamera FPS'ini etkilemez.
 
-// ortak çizim primitifleri (viewBox 0 0 100 100) -----------------------------
+import { useEffect, useRef } from "react";
+import {
+  keyframesFor,
+  poseAt,
+  staticFrame,
+  groundYFor,
+  POSE_PERIOD_MS,
+} from "../lib/stickFigure";
 
-function Figure({ joints, opacity = 1 }) {
-  // joints: { head:[x,y], shoulder, hip, knee, ankle, elbow?, wrist? }
-  const { head, shoulder, hip, knee, ankle, elbow, wrist } = joints;
-  const line = (a, b, key) =>
-    a && b ? (
-      <line
-        key={key}
-        x1={a[0]}
-        y1={a[1]}
-        x2={b[0]}
-        y2={b[1]}
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-    ) : null;
-  return (
-    <g opacity={opacity}>
-      {line(shoulder, hip, "torso")}
-      {line(hip, knee, "thigh")}
-      {line(knee, ankle, "shin")}
-      {elbow && line(shoulder, elbow, "uarm")}
-      {wrist && line(elbow, wrist, "farm")}
-      {head && (
-        <circle
-          cx={head[0]}
-          cy={head[1]}
-          r="5.2"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.4"
-        />
-      )}
-    </g>
-  );
+// Hangi boyutlar canlanır — strip listede çok figür olur, statik tutulur.
+const ANIMATED_SIZES = new Set(["sm", "md"]);
+
+function prefersReducedMotion() {
+  if (typeof window === "undefined" || !window.matchMedia) return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-// hareket başına iki-poz silüeti ---------------------------------------------
-
-const POSES = {
-  squat: {
-    top: {
-      head: [50, 16],
-      shoulder: [50, 26],
-      hip: [50, 52],
-      knee: [50, 72],
-      ankle: [50, 90],
-    },
-    bottom: {
-      head: [40, 30],
-      shoulder: [42, 40],
-      hip: [44, 64],
-      knee: [62, 64],
-      ankle: [60, 90],
-    },
-  },
-  pushup: {
-    // Yatay düzlem — yandan görünüm: gövde düz hat, dirsek açılır/kapanır.
-    top: {
-      head: [16, 40],
-      shoulder: [30, 46],
-      hip: [62, 52],
-      knee: [80, 56],
-      ankle: [94, 60],
-      elbow: [30, 70],
-      wrist: [30, 88],
-    },
-    bottom: {
-      head: [16, 52],
-      shoulder: [30, 58],
-      hip: [62, 60],
-      knee: [80, 62],
-      ankle: [94, 64],
-      elbow: [44, 78],
-      wrist: [30, 88],
-    },
-  },
-  lunge: {
-    // Yan görünüm: ayakta (tepe) → öne hamle, ön diz bükük + gövde hafif öne (dip).
-    top: {
-      head: [50, 16],
-      shoulder: [50, 26],
-      hip: [50, 52],
-      knee: [50, 72],
-      ankle: [50, 90],
-    },
-    bottom: {
-      // Öne hamle: ön ayak ileride (sağda), ön diz ~90° bükük; gövde hafif öne eğik.
-      head: [46, 26],
-      shoulder: [48, 36],
-      hip: [50, 60],
-      knee: [66, 74], // ön diz öne-aşağı (ayak ucunun üstünde, geçmeden)
-      ankle: [68, 90], // ön ayak ileride
-    },
-  },
-  generic: {
-    top: {
-      head: [50, 16],
-      shoulder: [50, 28],
-      hip: [50, 56],
-      knee: [50, 76],
-      ankle: [50, 92],
-      elbow: [38, 42],
-      wrist: [30, 56],
-    },
-    bottom: null,
-  },
-};
-
-function poseKeyFor(exercise) {
-  const ref = exercise?.ruleSetRef;
-  if (ref === "squat") return "squat";
-  if (ref === "pushup") return "pushup";
-  if (ref === "lunge") return "lunge";
-  return "generic";
-}
+// Çizim primitifleri — bir <g> içindeki çizgilere ref ile attribute basarız.
+const BONES = [
+  ["shoulder", "hip"],
+  ["hip", "knee"],
+  ["knee", "ankle"],
+  ["shoulder", "elbow"],
+  ["elbow", "wrist"],
+];
 
 /**
- * @param {object} exercise - { name, ruleSetRef }
+ * @param {object} exercise - { name, ruleSetRef, id }
  * @param {string} size     - "strip" | "sm" | "md", varsayılan "md"
  */
 export default function PosePreview({ exercise, size = "md" }) {
-  const poseKey = poseKeyFor(exercise);
-  const pose = POSES[poseKey];
+  const frames = keyframesFor(exercise);
+  const groundY = groundYFor(exercise);
   const className = `pose-preview pose-preview--${size}`;
+
+  const lineRefs = useRef([]);
+  const headRef = useRef(null);
+  const rafRef = useRef(0);
+
+  const animated = ANIMATED_SIZES.has(size) && !prefersReducedMotion();
+
+  // İlk render referans pozu (statikse bu. animasyonda rAF üzerine yazar).
+  const initial = animated ? frames[0] : staticFrame(exercise);
+
+  useEffect(() => {
+    if (!animated) return undefined;
+    if (prefersReducedMotion()) return undefined; // matchMedia anlık değişimi
+
+    const start = performance.now();
+
+    const apply = (j) => {
+      lineRefs.current.forEach((el, i) => {
+        if (!el) return;
+        const [aKey, bKey] = BONES[i];
+        const a = j[aKey];
+        const b = j[bKey];
+        if (a && b) {
+          el.setAttribute("x1", a[0]);
+          el.setAttribute("y1", a[1]);
+          el.setAttribute("x2", b[0]);
+          el.setAttribute("y2", b[1]);
+          el.style.display = "";
+        } else {
+          el.style.display = "none";
+        }
+      });
+      if (headRef.current && j.head) {
+        headRef.current.setAttribute("cx", j.head[0]);
+        headRef.current.setAttribute("cy", j.head[1]);
+      }
+    };
+
+    const tick = (now) => {
+      apply(poseAt(frames, now - start, POSE_PERIOD_MS));
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [animated, frames]);
+
+  const renderBone = (aKey, bKey, i) => {
+    const a = initial[aKey];
+    const b = initial[bKey];
+    const visible = a && b;
+    return (
+      <line
+        key={`${aKey}-${bKey}`}
+        ref={(el) => (lineRefs.current[i] = el)}
+        x1={visible ? a[0] : 0}
+        y1={visible ? a[1] : 0}
+        x2={visible ? b[0] : 0}
+        y2={visible ? b[1] : 0}
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        style={visible ? undefined : { display: "none" }}
+      />
+    );
+  };
 
   return (
     <span className={className} aria-hidden="true">
@@ -140,15 +119,27 @@ export default function PosePreview({ exercise, size = "md" }) {
         {/* zemin/destek çizgisi — duruşu yere oturtur */}
         <line
           x1="8"
-          y1={poseKey === "pushup" ? "90" : "92"}
+          y1={groundY}
           x2="92"
-          y2={poseKey === "pushup" ? "90" : "92"}
+          y2={groundY}
           stroke="currentColor"
           strokeWidth="1.2"
           opacity="0.35"
         />
-        {pose.bottom && <Figure joints={pose.bottom} opacity={0.35} />}
-        <Figure joints={pose.top} opacity={1} />
+        <g>
+          {BONES.map(([a, b], i) => renderBone(a, b, i))}
+          {initial.head && (
+            <circle
+              ref={headRef}
+              cx={initial.head[0]}
+              cy={initial.head[1]}
+              r="5.2"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+            />
+          )}
+        </g>
       </svg>
     </span>
   );

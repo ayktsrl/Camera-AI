@@ -683,6 +683,15 @@ body,
   display: block;
 }
 
+/* Animasyonlu çöp adam — rAF JS tarafında durdurulur; bu yalnız güvenlik ağı.
+   prefers-reduced-motion açıksa figür sabit kalır (JS zaten statik kareyi basar). */
+@media (prefers-reduced-motion: reduce) {
+  .pose-preview-svg * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
 /* Rehberli set ekranı: önizleme satırı (eski .player-links yerine) */
 .player-preview-row {
   margin-top: 18px;
