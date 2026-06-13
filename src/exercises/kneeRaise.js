@@ -18,6 +18,10 @@
 import { LM, isPointReliable } from "../lib/pose";
 import { angleAtPoint } from "../lib/angles";
 import { angleAtPoint3D } from "../lib/angles3d";
+import { DEFAULT_TUNINGS } from "../lib/thresholds";
+
+// Eşikler MERKEZİ config'ten (lib/thresholds.js) — tanım yeri orası.
+const T = DEFAULT_TUNINGS.kneeRaise;
 
 const SIDE_JOINTS = {
   left: { shoulder: LM.LEFT_SHOULDER, hip: LM.LEFT_HIP, knee: LM.LEFT_KNEE },
@@ -57,12 +61,12 @@ export const kneeRaise = {
   // Ayakta düz ≈ 175° → "standing"; diz kalça hizasında ≈ 90° → "bottom".
   tracking: {
     primaryMetric: "hipAngle", // = aktif (min) kalça açısı
-    phases: { standingMin: 155, bottomMax: 100 },
-    attemptBelow: 135, // belirgin kalkış ama hizaya gelmedi → "daha yukarı" uyarısı
+    phases: { ...T.phases },
+    attemptBelow: T.attemptBelow, // belirgin kalkış ama hizaya gelmedi → "daha yukarı" uyarısı
   },
-  phases: { standingMin: 155, bottomMax: 100 },
-  phaseConfirmFrames: 4,
-  attemptBelow: 135,
+  phases: { ...T.phases },
+  phaseConfirmFrames: T.phaseConfirmFrames,
+  attemptBelow: T.attemptBelow,
 
   phaseLabels: {
     standing: "Ayakta",
@@ -87,7 +91,7 @@ export const kneeRaise = {
         LM.RIGHT_SHOULDER, LM.RIGHT_HIP, LM.RIGHT_KNEE,
       ],
       phases: ["attemptClose"],
-      predicate: { op: "gt", threshold: 100, tolerance: 0 }, // tepe ≤100° hiza
+      predicate: { op: "gt", threshold: T.faults.depth.threshold, tolerance: T.faults.depth.tolerance }, // tepe ≤eşik hiza
       severity: "minor",
       minVisibility: 0.5,
       cameraHint: "front45",

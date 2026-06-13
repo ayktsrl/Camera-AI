@@ -23,6 +23,10 @@
 
 import { LM, isPointReliable } from "../lib/pose";
 import { angleAtPoint3D, midpoint3D, verticalTiltDeg3D } from "../lib/angles3d";
+import { DEFAULT_TUNINGS } from "../lib/thresholds";
+
+// Eşikler MERKEZİ config'ten (lib/thresholds.js) — tanım yeri orası.
+const T = DEFAULT_TUNINGS.plank;
 
 function bodyReliable(lm) {
   return (
@@ -42,20 +46,10 @@ export const plank = {
   cameraHint: "Kamera: yandan, tüm gövde karede (~2 m)",
 
   // İzometrik tutuş eşikleri (rep "phases" YERİNE) — holdEngine bunları okur.
-  hold: {
-    // Vücut yatay mı? omuz→ayakBileği hattının dikeyle açısı (verticalTiltDeg3D).
-    // 90° = tam yatay. Plank ≈ 70°+ kabul (alt ucu pike/yüksek kalça, üstü kalkma).
-    horizontalMinTilt: 62,
-    // Düz hat: omuz-kalça-ayak açısı bu değerin üstündeyse "geçerli" hold.
-    // Histerezis: geçerli ≥ enter, ihlal < exit (titreyen sınırda flicker yok).
-    straightEnter: 160,
-    straightExit: 152,
-    // Geçerli pozisyona girişte onay kareleri (titreşim debounce).
-    enterFrames: 4,
-    // Pozisyon ne kadar süre bozuk kalırsa "set bitti" sayılır (hands-free).
-    // Owner: "kullanıcı bırakınca / çok bozunca biter." Sürekli bozuk ~6 sn.
-    breakEndMs: 6000,
-  },
+  // Anlam: horizontalMinTilt = yatay kabul açısı (90 = tam yatay); straightEnter/Exit =
+  // düz-hat histerezis bandı; enterFrames = giriş debounce; breakEndMs = bozuk-kalma
+  // bitiş penceresi. (Merkezi config: thresholds.plank.hold)
+  hold: { ...T.hold },
 
   faultLabels: {
     holding: "Tutuyor",
@@ -74,9 +68,9 @@ export const plank = {
       space: "world3d",
       joints: [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER, LM.LEFT_HIP, LM.RIGHT_HIP, LM.LEFT_ANKLE, LM.RIGHT_ANKLE],
       phases: ["holding"], // yalnız geçerli tutuş fazında değerlendirilir
-      // <156° ≈ >24° sarkma. Histerezis ±4°. Yön (sarkık) metriğe gömülü:
+      // <eşik ≈ sarkma. Yön (sarkık) metriğe gömülü:
       // bodyLineSag yalnız kalça ALTTAysa açıyı, değilse 180 (ihlal yok) döner.
-      predicate: { op: "lt", threshold: 156, tolerance: 4 },
+      predicate: { op: "lt", threshold: T.faults.hipSag.threshold, tolerance: T.faults.hipSag.tolerance },
       minFrames: 8,
       cooldownMs: 5000,
       severity: "critical",
@@ -92,8 +86,8 @@ export const plank = {
       space: "world3d",
       joints: [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER, LM.LEFT_HIP, LM.RIGHT_HIP, LM.LEFT_ANKLE, LM.RIGHT_ANKLE],
       phases: ["holding"],
-      // <160° ≈ >20° kalkma. Histerezis ±4°. Yön (yukarı) metriğe gömülü.
-      predicate: { op: "lt", threshold: 160, tolerance: 4 },
+      // <eşik ≈ kalkma. Yön (yukarı) metriğe gömülü.
+      predicate: { op: "lt", threshold: T.faults.hipPike.threshold, tolerance: T.faults.hipPike.tolerance },
       minFrames: 8,
       cooldownMs: 5000,
       severity: "major",

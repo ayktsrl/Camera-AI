@@ -25,6 +25,10 @@ import {
   verticalTiltDeg3D,
   midpoint3D,
 } from "../lib/angles3d";
+import { DEFAULT_TUNINGS } from "../lib/thresholds";
+
+// Eşikler MERKEZİ config'ten (lib/thresholds.js) — tanım yeri orası.
+const T = DEFAULT_TUNINGS.lunge;
 
 const SIDE_JOINTS = {
   left: {
@@ -105,12 +109,12 @@ export const lunge = {
   // Ayakta (her iki bacak düz) ≈ 160°+ → "standing"; dipte ön diz ≤ 95° → "bottom".
   tracking: {
     primaryMetric: "kneeAngle", // = aktif (min) diz açısı
-    phases: { standingMin: 155, bottomMax: 95 },
-    attemptBelow: 130, // belirgin iniş var ama dibe ulaşılmadı → derinlik hatası
+    phases: { ...T.phases },
+    attemptBelow: T.attemptBelow, // belirgin iniş var ama dibe ulaşılmadı → derinlik hatası
   },
-  phases: { standingMin: 155, bottomMax: 95 },
-  phaseConfirmFrames: 4,
-  attemptBelow: 130,
+  phases: { ...T.phases },
+  phaseConfirmFrames: T.phaseConfirmFrames,
+  attemptBelow: T.attemptBelow,
 
   phaseLabels: {
     standing: "Ayakta",
@@ -135,7 +139,7 @@ export const lunge = {
         LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE,
       ],
       phases: ["attemptClose"],
-      predicate: { op: "gt", threshold: 95, tolerance: 0 }, // dip ≤95° tam tekrar
+      predicate: { op: "gt", threshold: T.faults.depth.threshold, tolerance: T.faults.depth.tolerance }, // dip ≤eşik tam tekrar
       severity: "major",
       minVisibility: 0.6,
       cameraHint: "side",
@@ -149,8 +153,8 @@ export const lunge = {
       space: "screen2d", // yan görüş; world-z gürültüsünden bağımsız tutuldu
       joints: [LM.LEFT_KNEE, LM.LEFT_FOOT_INDEX, LM.RIGHT_KNEE, LM.RIGHT_FOOT_INDEX],
       phases: ["descent", "bottom", "ascent"],
-      // > bbox'ın %5'i ileri taşma belirgin (~7–8 cm). Histerezis ±%1.5.
-      predicate: { op: "gt", threshold: 5, tolerance: 1.5 },
+      // > bbox'ın %eşiği ileri taşma belirgin (~7–8 cm). Histerezis tolerance.
+      predicate: { op: "gt", threshold: T.faults.kneeOverToe.threshold, tolerance: T.faults.kneeOverToe.tolerance },
       minFrames: 5,
       cooldownMs: 4000,
       severity: "critical",
@@ -170,7 +174,7 @@ export const lunge = {
       // Sadece AŞIRI öne eğilme (>40°) uyarılır; geniş tolerans → yanlış pozitif yok.
       // (Geriye yaslanma da ölçülmek istense ayrı işaretli metrik gerekir; P0'da
       //  tek yönlü aşırı-öne uyarısı — owner notunun ruhu: hafif öne İYİ.)
-      predicate: { op: "gt", threshold: 40, tolerance: 5 },
+      predicate: { op: "gt", threshold: T.faults.torso.threshold, tolerance: T.faults.torso.tolerance },
       minFrames: 6,
       cooldownMs: 4500,
       severity: "major",

@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createHoldEngine } from "../lib/holdEngine";
+import { resolveTunedExercise } from "../lib/thresholds";
 
 const WARNING_VISIBLE_MS = 3000;
 
@@ -11,7 +12,8 @@ export function useHoldCounter({ exercise, running, onEvent }) {
   const exerciseRef = useRef(exercise);
   const engineRef = useRef(null);
   if (engineRef.current === null) {
-    engineRef.current = createHoldEngine(exercise);
+    // Etkin tuning (varsayılan ⊕ localStorage override) egzersize uygulanır.
+    engineRef.current = createHoldEngine(resolveTunedExercise(exercise));
   }
 
   const [phase, setPhase] = useState("idle"); // idle | holding | broken
@@ -35,7 +37,8 @@ export function useHoldCounter({ exercise, running, onEvent }) {
 
   /** Yeni set başlangıcı: motoru ve sayaçları sıfırlar. */
   const reset = useCallback(() => {
-    engineRef.current = createHoldEngine(exerciseRef.current);
+    // Set başında etkin tuning yeniden okunur → kalibrasyon ayarı sonraki sete yansır.
+    engineRef.current = createHoldEngine(resolveTunedExercise(exerciseRef.current));
     setPhase("idle");
     setHeldSeconds(0);
     setWarning(null);

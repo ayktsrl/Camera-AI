@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRepEngine } from "../lib/repEngine";
+import { resolveTunedExercise } from "../lib/thresholds";
 
 const WARNING_VISIBLE_MS = 3000;
 
@@ -11,7 +12,8 @@ export function useRepCounter({ exercise, running, onEvent }) {
   const exerciseRef = useRef(exercise);
   const engineRef = useRef(null);
   if (engineRef.current === null) {
-    engineRef.current = createRepEngine(exercise);
+    // Etkin tuning (varsayılan ⊕ localStorage override) egzersize uygulanır.
+    engineRef.current = createRepEngine(resolveTunedExercise(exercise));
   }
 
   const [phase, setPhase] = useState("idle");
@@ -38,7 +40,8 @@ export function useRepCounter({ exercise, running, onEvent }) {
 
   /** Yeni set başlangıcı: motoru ve sayaçları sıfırlar. */
   const reset = useCallback(() => {
-    engineRef.current = createRepEngine(exerciseRef.current);
+    // Set başında etkin tuning yeniden okunur → kalibrasyon ayarı sonraki sete yansır.
+    engineRef.current = createRepEngine(resolveTunedExercise(exerciseRef.current));
     lastRepAtRef.current = performance.now();
     setPhase("idle");
     setRepCount(0);

@@ -13,6 +13,11 @@ import {
   midpoint3D,
   fppaDeg,
 } from "../lib/angles3d";
+import { DEFAULT_TUNINGS } from "../lib/thresholds";
+
+// Eşikler MERKEZİ config'ten (lib/thresholds.js) okunur — tanım yeri orası.
+// Bu blok yalnız varsayılanı yansıtır; çalışma-anı override'ı motor uygular.
+const T = DEFAULT_TUNINGS.squat;
 
 const SIDE_JOINTS = {
   left: { hip: LM.LEFT_HIP, knee: LM.LEFT_KNEE, ankle: LM.LEFT_ANKLE },
@@ -75,23 +80,20 @@ export const squat = {
   // Rep FSM yapılandırması (genel motor bunu okur): faz kararı diz açısından sürülür.
   tracking: {
     primaryMetric: "kneeAngle",
-    phases: { standingMin: 160, bottomMax: 100 },
-    attemptBelow: 140,
+    phases: { ...T.phases }, // ayakta diz > standingMin; dipte diz < bottomMax
+    attemptBelow: T.attemptBelow,
   },
 
   // Faz eşikleri (diz açısı, derece) — geriye uyum için tutulur (tracking ile aynı).
-  phases: {
-    standingMin: 160, // ayakta: diz açısı > 160°
-    bottomMax: 100, // dipte: diz açısı < 100°
-  },
+  phases: { ...T.phases },
 
   // Faz geçişi debounce — titreşimden çift sayma olmaması için
   // bir faz adayının onaylanması gereken ardışık frame sayısı.
-  phaseConfirmFrames: 4,
+  phaseConfirmFrames: T.phaseConfirmFrames,
 
   // Bir inişin "tekrar denemesi" sayılması için inilmesi gereken üst sınır.
   // Bunun altına inilip dibe (bottomMax) ulaşılamazsa derinlik hatasıdır.
-  attemptBelow: 140,
+  attemptBelow: T.attemptBelow,
 
   // Faz etiketleri (UI)
   phaseLabels: {
@@ -108,8 +110,9 @@ export const squat = {
     minStableFrames: 15,
     isStable(metrics) {
       return (
-        metrics.kneeAngle >= 160 &&
-        (metrics.torsoTilt3d == null || metrics.torsoTilt3d < 15)
+        metrics.kneeAngle >= T.calibration.stableKneeMin &&
+        (metrics.torsoTilt3d == null ||
+          metrics.torsoTilt3d < T.calibration.stableTorsoMax)
       );
     },
     capture(lm) {
@@ -137,7 +140,7 @@ export const squat = {
       space: "world3d",
       joints: [LM.LEFT_HIP, LM.LEFT_KNEE, LM.LEFT_ANKLE, LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE],
       phases: ["attemptClose"], // özel: frame döngüsü dışı, deneme kapanışında
-      predicate: { op: "gt", threshold: 100, tolerance: 0 }, // dip ≤100° sayılır; 100–140° = yarım tekrar
+      predicate: { op: "gt", threshold: T.faults.depth.threshold, tolerance: T.faults.depth.tolerance }, // dip ≤eşik sayılır; eşik–attemptBelow = yarım tekrar
       severity: "major",
       minVisibility: 0.6,
       cameraHint: "side",
@@ -151,7 +154,7 @@ export const squat = {
       space: "world3d",
       joints: [LM.LEFT_HIP, LM.LEFT_KNEE, LM.LEFT_ANKLE, LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE],
       phases: ["descent", "bottom", "ascent"],
-      predicate: { op: "lt", threshold: 165, tolerance: 3 }, // <165° ≈ >15° medial çökme
+      predicate: { op: "lt", threshold: T.faults.valgus.threshold, tolerance: T.faults.valgus.tolerance }, // <165° ≈ >15° medial çökme
       minFrames: 5,
       cooldownMs: 4000,
       severity: "critical",
@@ -168,7 +171,7 @@ export const squat = {
       joints: [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER, LM.LEFT_HIP, LM.RIGHT_HIP],
       phases: ["descent", "bottom", "ascent"],
       // 45° low-bar'da normaldir; 3D ölçüm güvenilir olduğu için eşik 55°'e gevşetildi.
-      predicate: { op: "gt", threshold: 55, tolerance: 3 },
+      predicate: { op: "gt", threshold: T.faults.torso.threshold, tolerance: T.faults.torso.tolerance },
       minFrames: 6,
       cooldownMs: 4000,
       severity: "major",
@@ -184,7 +187,7 @@ export const squat = {
       space: "screen2d", // world-z gürültüsü ~3 cm ölçeği yer — screen-y güvenilir
       joints: [LM.LEFT_HEEL, LM.RIGHT_HEEL],
       phases: ["descent", "bottom", "ascent"],
-      predicate: { op: "gt", threshold: 2, tolerance: 0.5 }, // > bbox'ın %2'si (~3–4 cm)
+      predicate: { op: "gt", threshold: T.faults.heel.threshold, tolerance: T.faults.heel.tolerance }, // > bbox'ın %eşiği (~3–4 cm)
       minFrames: 5,
       cooldownMs: 4000,
       severity: "major",
@@ -200,7 +203,7 @@ export const squat = {
       space: "world3d",
       joints: [LM.LEFT_HIP, LM.LEFT_KNEE, LM.LEFT_ANKLE, LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE],
       phases: ["descent", "ascent"],
-      predicate: { op: "gt", threshold: 14, tolerance: 3 },
+      predicate: { op: "gt", threshold: T.faults.asymmetry.threshold, tolerance: T.faults.asymmetry.tolerance },
       minFrames: 8,
       cooldownMs: 4000,
       severity: "minor",

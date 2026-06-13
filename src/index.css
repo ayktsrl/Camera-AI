@@ -1476,3 +1476,154 @@ body,
   font-size: 13px;
   color: var(--faint);
 }
+
+/* ============================================================
+   Kalibrasyon Modu — geliştirici/owner eşik ayar ekranı.
+   Fonksiyon öncelikli: ham değerler net, slider'lar okunur.
+   ============================================================ */
+
+.panel--calibrate {
+  overflow-y: auto;
+  max-height: 100vh;
+}
+
+/* Canlı ham değer paneli — sahne üstüne bindirilmiş, monospace- vari net sayılar */
+.calib-live {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  min-width: 220px;
+  padding: 14px 16px;
+  background: rgba(19, 21, 18, 0.82);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+  font-variant-numeric: tabular-nums;
+  z-index: 2;
+}
+
+.calib-live-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 0;
+  font-size: 14px;
+}
+
+.calib-live-key {
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
+.calib-live-val {
+  color: var(--paper);
+  font-weight: 600;
+}
+
+.calib-live-primary .calib-live-val {
+  color: var(--accent);
+  font-size: 22px;
+}
+
+.calib-live-count {
+  font-size: 18px;
+}
+
+.calib-live-divider {
+  height: 1px;
+  margin: 8px 0;
+  background: var(--hairline);
+}
+
+/* Hareket "özelleştirildi" rozeti */
+.calib-badge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.calib-controls,
+.calib-persist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Slider listesi */
+.calib-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.calib-slider-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.calib-slider-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.calib-slider-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--paper);
+  font-variant-numeric: tabular-nums;
+}
+
+.calib-slider input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--hairline);
+  outline: none;
+  cursor: pointer;
+}
+
+.calib-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--ink);
+  cursor: pointer;
+}
+
+.calib-slider input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--ink);
+  cursor: pointer;
+}
+
+.calib-slider-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--faint);
+  line-height: 1.4;
+}
+
+.calib-hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--faint);
+  line-height: 1.4;
+}

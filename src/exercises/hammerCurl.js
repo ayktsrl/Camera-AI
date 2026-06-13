@@ -22,6 +22,10 @@
 import { LM, isPointReliable } from "../lib/pose";
 import { angleAtPoint, verticalTiltDeg } from "../lib/angles";
 import { angleAtPoint3D, verticalTiltDeg3D } from "../lib/angles3d";
+import { DEFAULT_TUNINGS } from "../lib/thresholds";
+
+// Eşikler MERKEZİ config'ten (lib/thresholds.js) — tanım yeri orası.
+const T = DEFAULT_TUNINGS.hammerCurl;
 
 const SIDE_JOINTS = {
   left: { shoulder: LM.LEFT_SHOULDER, elbow: LM.LEFT_ELBOW, wrist: LM.LEFT_WRIST },
@@ -77,12 +81,12 @@ export const hammerCurl = {
   // Açık ≈ 160° → "standing"; bükük ≈ 50° → "bottom".
   tracking: {
     primaryMetric: "elbowAngle",
-    phases: { standingMin: 150, bottomMax: 65 },
-    attemptBelow: 120, // belirgin bükme ama tam değil → "derinlik"
+    phases: { ...T.phases },
+    attemptBelow: T.attemptBelow, // belirgin bükme ama tam değil → "derinlik"
   },
-  phases: { standingMin: 150, bottomMax: 65 },
-  phaseConfirmFrames: 4,
-  attemptBelow: 120,
+  phases: { ...T.phases },
+  phaseConfirmFrames: T.phaseConfirmFrames,
+  attemptBelow: T.attemptBelow,
 
   phaseLabels: {
     standing: "Kol açık",
@@ -105,8 +109,8 @@ export const hammerCurl = {
         LM.RIGHT_SHOULDER, LM.RIGHT_ELBOW,
       ],
       phases: ["descent", "bottom", "ascent"],
-      // >25° = üst kol dikeyden belirgin sapma (dirsek öne/yana savruluyor).
-      predicate: { op: "gt", threshold: 25, tolerance: 5 },
+      // >eşik = üst kol dikeyden belirgin sapma (dirsek öne/yana savruluyor).
+      predicate: { op: "gt", threshold: T.faults.elbowDrift.threshold, tolerance: T.faults.elbowDrift.tolerance },
       minFrames: 6,
       cooldownMs: 4000,
       severity: "major", // izolasyon hatası, tehlikeli değil → critical değil
@@ -125,7 +129,7 @@ export const hammerCurl = {
         LM.RIGHT_SHOULDER, LM.RIGHT_ELBOW, LM.RIGHT_WRIST,
       ],
       phases: ["attemptClose"],
-      predicate: { op: "gt", threshold: 65, tolerance: 0 }, // tepe ≤65° tam bükme
+      predicate: { op: "gt", threshold: T.faults.depth.threshold, tolerance: T.faults.depth.tolerance }, // tepe ≤eşik tam bükme
       severity: "major",
       minVisibility: 0.5,
       cameraHint: "side",

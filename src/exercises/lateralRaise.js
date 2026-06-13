@@ -25,6 +25,10 @@
 import { LM, isPointReliable } from "../lib/pose";
 import { angleAtPoint } from "../lib/angles";
 import { angleAtPoint3D } from "../lib/angles3d";
+import { DEFAULT_TUNINGS } from "../lib/thresholds";
+
+// Eşikler MERKEZİ config'ten (lib/thresholds.js) — tanım yeri orası.
+const T = DEFAULT_TUNINGS.lateralRaise;
 
 const SIDE_JOINTS = {
   left: { hip: LM.LEFT_HIP, shoulder: LM.LEFT_SHOULDER, wrist: LM.LEFT_WRIST },
@@ -66,12 +70,12 @@ export const lateralRaise = {
   // Kol omuz hizasında → loweredAngle düşük → "bottom".
   tracking: {
     primaryMetric: "loweredAngle",
-    phases: { standingMin: 150, bottomMax: 100 },
-    attemptBelow: 130, // belirgin kalkış ama omuz hizasına gelmedi → "derinlik"
+    phases: { ...T.phases },
+    attemptBelow: T.attemptBelow, // belirgin kalkış ama omuz hizasına gelmedi → "derinlik"
   },
-  phases: { standingMin: 150, bottomMax: 100 },
-  phaseConfirmFrames: 4,
-  attemptBelow: 130,
+  phases: { ...T.phases },
+  phaseConfirmFrames: T.phaseConfirmFrames,
+  attemptBelow: T.attemptBelow,
 
   phaseLabels: {
     standing: "Kol aşağıda",
@@ -94,8 +98,8 @@ export const lateralRaise = {
         LM.RIGHT_HIP, LM.RIGHT_SHOULDER, LM.RIGHT_WRIST,
       ],
       phases: ["descent", "bottom", "ascent"],
-      // >100° = kolu omuz hizasının belirgin üstüne kaldırıyor (trapez silkme).
-      predicate: { op: "gt", threshold: 100, tolerance: 5 },
+      // >eşik = kolu omuz hizasının belirgin üstüne kaldırıyor (trapez silkme).
+      predicate: { op: "gt", threshold: T.faults.tooHigh.threshold, tolerance: T.faults.tooHigh.tolerance },
       minFrames: 5,
       cooldownMs: 4000,
       severity: "major",
@@ -114,8 +118,8 @@ export const lateralRaise = {
         LM.RIGHT_HIP, LM.RIGHT_SHOULDER, LM.RIGHT_WRIST,
       ],
       phases: ["attemptClose"],
-      // tepe loweredAngle ≤100 (abduction ≥80°, omuz hizası) tam tekrar.
-      predicate: { op: "gt", threshold: 100, tolerance: 0 },
+      // tepe loweredAngle ≤eşik (abduction ≥80°, omuz hizası) tam tekrar.
+      predicate: { op: "gt", threshold: T.faults.depth.threshold, tolerance: T.faults.depth.tolerance },
       severity: "major",
       minVisibility: 0.5,
       cameraHint: "front45",

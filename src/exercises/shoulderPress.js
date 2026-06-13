@@ -25,6 +25,10 @@
 import { LM, isPointReliable } from "../lib/pose";
 import { angleAtPoint } from "../lib/angles";
 import { angleAtPoint3D } from "../lib/angles3d";
+import { DEFAULT_TUNINGS } from "../lib/thresholds";
+
+// Eşikler MERKEZİ config'ten (lib/thresholds.js) — tanım yeri orası.
+const T = DEFAULT_TUNINGS.shoulderPress;
 
 const SIDE_JOINTS = {
   left: { hip: LM.LEFT_HIP, shoulder: LM.LEFT_SHOULDER, elbow: LM.LEFT_ELBOW, wrist: LM.LEFT_WRIST },
@@ -84,12 +88,12 @@ export const shoulderPress = {
   // Yukarı uzanmış → pressDownAngle düşük → "bottom".
   tracking: {
     primaryMetric: "pressDownAngle",
-    phases: { standingMin: 90, bottomMax: 30 },
-    attemptBelow: 70, // belirgin itiş ama tam uzanmadı → "derinlik"
+    phases: { ...T.phases },
+    attemptBelow: T.attemptBelow, // belirgin itiş ama tam uzanmadı → "derinlik"
   },
-  phases: { standingMin: 90, bottomMax: 30 },
-  phaseConfirmFrames: 4,
-  attemptBelow: 70,
+  phases: { ...T.phases },
+  phaseConfirmFrames: T.phaseConfirmFrames,
+  attemptBelow: T.attemptBelow,
 
   phaseLabels: {
     standing: "Omuzda",
@@ -112,8 +116,8 @@ export const shoulderPress = {
         LM.RIGHT_HIP, LM.RIGHT_SHOULDER, LM.RIGHT_ELBOW,
       ],
       phases: ["standing", "descent", "ascent"], // başlangıç (omuzda) ve geçişlerde anlamlı
-      // >75° = üst kol saf yana açık (öne almıyor). Hoca "biraz öne al".
-      predicate: { op: "gt", threshold: 75, tolerance: 5 },
+      // >eşik = üst kol saf yana açık (öne almıyor). Hoca "biraz öne al".
+      predicate: { op: "gt", threshold: T.faults.elbowFlare.threshold, tolerance: T.faults.elbowFlare.tolerance },
       minFrames: 6,
       cooldownMs: 4500,
       severity: "major",
@@ -132,8 +136,8 @@ export const shoulderPress = {
         LM.RIGHT_SHOULDER, LM.RIGHT_ELBOW, LM.RIGHT_WRIST,
       ],
       phases: ["attemptClose"],
-      // tepe pressDownAngle ≤30 (dirsek ≥150°, tam uzanma) tam tekrar.
-      predicate: { op: "gt", threshold: 30, tolerance: 0 },
+      // tepe pressDownAngle ≤eşik (dirsek ≥150°, tam uzanma) tam tekrar.
+      predicate: { op: "gt", threshold: T.faults.depth.threshold, tolerance: T.faults.depth.tolerance },
       severity: "major",
       minVisibility: 0.5,
       cameraHint: "front45",

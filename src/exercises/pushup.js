@@ -14,6 +14,10 @@
 import { LM, isPointReliable } from "../lib/pose";
 import { angleAtPoint } from "../lib/angles";
 import { angleAtPoint3D, midpoint3D } from "../lib/angles3d";
+import { DEFAULT_TUNINGS } from "../lib/thresholds";
+
+// Eşikler MERKEZİ config'ten (lib/thresholds.js) — tanım yeri orası.
+const T = DEFAULT_TUNINGS.pushup;
 
 const SIDE_ARM = {
   left: { shoulder: LM.LEFT_SHOULDER, elbow: LM.LEFT_ELBOW, wrist: LM.LEFT_WRIST },
@@ -49,12 +53,12 @@ export const pushup = {
   // Üstte (kollar düz) ≈ 170°+ → "standing"; dipte (göğüs aşağı) ≤ 95° → "bottom".
   tracking: {
     primaryMetric: "elbowAngle",
-    phases: { standingMin: 155, bottomMax: 95 },
-    attemptBelow: 130, // belirgin iniş var ama dibe ulaşılmadı → derinlik hatası
+    phases: { ...T.phases },
+    attemptBelow: T.attemptBelow, // belirgin iniş var ama dibe ulaşılmadı → derinlik hatası
   },
-  phases: { standingMin: 155, bottomMax: 95 },
-  phaseConfirmFrames: 4,
-  attemptBelow: 130,
+  phases: { ...T.phases },
+  phaseConfirmFrames: T.phaseConfirmFrames,
+  attemptBelow: T.attemptBelow,
 
   phaseLabels: {
     standing: "Yukarı",
@@ -75,7 +79,7 @@ export const pushup = {
       space: "world3d",
       joints: [LM.LEFT_SHOULDER, LM.LEFT_ELBOW, LM.LEFT_WRIST, LM.RIGHT_SHOULDER, LM.RIGHT_ELBOW, LM.RIGHT_WRIST],
       phases: ["attemptClose"],
-      predicate: { op: "gt", threshold: 95, tolerance: 0 }, // dip ≤95° tam tekrar
+      predicate: { op: "gt", threshold: T.faults.depth.threshold, tolerance: T.faults.depth.tolerance }, // dip ≤eşik tam tekrar
       severity: "major",
       minVisibility: 0.6,
       cameraHint: "side",
@@ -90,7 +94,7 @@ export const pushup = {
       joints: [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER, LM.LEFT_HIP, LM.RIGHT_HIP, LM.LEFT_ANKLE, LM.RIGHT_ANKLE],
       phases: ["descent", "bottom", "ascent"],
       // <156° ≈ >24° kırılma (kalça sarkması VEYA pike). Histerezis ±4°.
-      predicate: { op: "lt", threshold: 156, tolerance: 4 },
+      predicate: { op: "lt", threshold: T.faults.bodyLine.threshold, tolerance: T.faults.bodyLine.tolerance },
       minFrames: 6,
       cooldownMs: 4000,
       severity: "critical",
@@ -107,7 +111,7 @@ export const pushup = {
       joints: [LM.NOSE, LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER, LM.LEFT_HIP, LM.RIGHT_HIP],
       phases: ["descent", "bottom", "ascent"],
       // Baş düşmesi/aşırı kaldırma açıyı 130° altına bozar. Histerezis ±5°.
-      predicate: { op: "lt", threshold: 130, tolerance: 5 },
+      predicate: { op: "lt", threshold: T.faults.neckLine.threshold, tolerance: T.faults.neckLine.tolerance },
       minFrames: 6,
       cooldownMs: 5000,
       severity: "major",

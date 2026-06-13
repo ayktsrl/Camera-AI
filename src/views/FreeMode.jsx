@@ -19,7 +19,7 @@ const MOTIVATION_COOLDOWN_MS = 14000;
 
 const PHASE_ORDER = ["standing", "descent", "bottom", "ascent"];
 
-export default function FreeMode({ onOpenProgram }) {
+export default function FreeMode({ onOpenProgram, onOpenCalibration }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -277,6 +277,17 @@ export default function FreeMode({ onOpenProgram }) {
           >
             {voiceOn ? "Ses açık" : "Ses kapalı"}
           </button>
+          {onOpenCalibration && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-calibrate"
+              onClick={onOpenCalibration}
+              disabled={running}
+              title="Eşikleri canlı ayarla (geliştirici)"
+            >
+              Kalibrasyon
+            </button>
+          )}
         </section>
 
         <footer className="meta">

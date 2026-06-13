@@ -31,6 +31,10 @@
 import { LM, isPointReliable } from "../lib/pose";
 import { angleAtPoint } from "../lib/angles";
 import { angleAtPoint3D } from "../lib/angles3d";
+import { DEFAULT_TUNINGS } from "../lib/thresholds";
+
+// Eşikler MERKEZİ config'ten (lib/thresholds.js) — tanım yeri orası.
+const T = DEFAULT_TUNINGS.jumpingJack;
 
 const SIDE_JOINTS = {
   left: { hip: LM.LEFT_HIP, shoulder: LM.LEFT_SHOULDER, wrist: LM.LEFT_WRIST },
@@ -39,12 +43,12 @@ const SIDE_JOINTS = {
 
 // Bacak "açık" eşiği: ayak bileği yatay mesafesi kalça genişliğinin bu katından
 // büyükse bacaklar açık sayılır. Ayaklar bitişik ≈ 1.0; jumping jack açık ≈ 1.8–2.2.
-// KALİBRASYON ADAYI — duruş/bacak genişliğine göre owner ince ayarı.
-const LEG_OPEN_RATIO = 1.5;
+// (Merkezi config: thresholds.jumpingJack.extra.legOpenRatio)
+const LEG_OPEN_RATIO = T.extra.legOpenRatio;
 
 // Faz eşikleri (tracking ile aynı kaynak) — bacak kapısının "standing"de kilitleyeceği
 // taban açı buradan türetilir (this'e bağımlılık olmadan, destructure'a dayanıklı).
-const STANDING_MIN = 150;
+const STANDING_MIN = T.phases.standingMin;
 
 /** Tarafın kol-abduction eklemleri 2D visibility/presence ile güvenilir mi? */
 function sideReliable(lm, side) {
@@ -101,13 +105,13 @@ export const jumpingJack = {
   // Açık (eller baş üstü) → closedAngle düşük → "bottom".
   tracking: {
     primaryMetric: "closedAngle",
-    phases: { standingMin: 150, bottomMax: 60 },
-    attemptBelow: 110, // belirgin açılma var ama tam açılmadı → "tam aç" uyarısı
+    phases: { ...T.phases },
+    attemptBelow: T.attemptBelow, // belirgin açılma var ama tam açılmadı → "tam aç" uyarısı
   },
-  phases: { standingMin: 150, bottomMax: 60 },
+  phases: { ...T.phases },
   // Hızlı hareket → daha kısa debounce; çift sayma frenini korur (3 ardışık frame).
-  phaseConfirmFrames: 3,
-  attemptBelow: 110,
+  phaseConfirmFrames: T.phaseConfirmFrames,
+  attemptBelow: T.attemptBelow,
 
   phaseLabels: {
     standing: "Kapalı",
@@ -131,7 +135,7 @@ export const jumpingJack = {
         LM.RIGHT_HIP, LM.RIGHT_SHOULDER, LM.RIGHT_WRIST,
       ],
       phases: ["attemptClose"],
-      predicate: { op: "gt", threshold: 60, tolerance: 0 }, // tepe ≤60° tam açılma
+      predicate: { op: "gt", threshold: T.faults.depth.threshold, tolerance: T.faults.depth.tolerance }, // tepe ≤eşik tam açılma
       severity: "minor",
       minVisibility: 0.5,
       cameraHint: "front45",
