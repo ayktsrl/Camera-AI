@@ -11,7 +11,8 @@
 // kopyası (kısaltılamaz). BURADA notlar PM tasarımından/form ipucundan gelir →
 // serbest yazılabilir (PM devir notu §5). Sesli okunur (set başında bir kez).
 //
-// TAKİPLİ (✅ P0): squat / pushup / lunge / plank / jumpingJack / kneeRaise.
+// TAKİPLİ (✅ P0): squat / pushup / lunge / plank / jumpingJack / kneeRaise +
+//   Batch 1: gluteBridge / legRaise / highKnees(kneeRaise motorunu paylaşır).
 //   trackable:true, trackingPhase:"P0", ruleSetRef:"<key>", untrackableReason:null
 //   → Batch 2 dersi: P0 olmazsa canlıda saymaz. Hepsi P0.
 // REHBERLİ (🔶): trackable:false, trackingPhase:null, ruleSetRef:null,
@@ -43,21 +44,18 @@ function plankFinisher(suffix) {
 }
 
 // Rehberli hareketlerin "neden takip edilemez" gerekçeleri — spec §3 tablosundan birebir.
+// NOT (Batch 1): glute-bridge / leg-raise / high-knees artık TAKİPLİ (✅ P0) —
+// yeni gluteBridge/legRaise motorları + highKnees kneeRaise motorunu paylaşır.
+// Eski "untrackable" gerekçeleri kaldırıldı (artık takip ediliyorlar).
 const REASON = {
   armCircles:
     "Serbest savurma — form kuralı anlamlı değil, sayım değeri düşük.",
-  highKnees:
-    "Çok hızlı alternatif koşu deseni — knee-raise motoru tek tek kontrollü diz kaldırma için, yüksek tempoda sayım kaçar.",
   pikePushup:
     "Push-up motoru yatay dirsek yörüngesi bekler; pike'ta gövde V şeklinde, kalça yüksekte — mevcut pushup ruleset'i yanlış sayar.",
-  gluteBridge:
-    "Sırtüstü/yere yatık poz; kalça açısı squat/lunge desenine yakın ama yatık supine pozda mevcut tracker eğitilmedi.",
   mountainClimber:
     "Plank pozisyonunda hızlı asimetrik diz çekme; mevcut motorlar simetrik/yavaş tempo için kalibre, hız sayım gürültüsü yaratır.",
   invertedRow:
     "Gövde yatay askıda; masa/bar kol+gövde örtüşmesi dirsek yörüngesini gizler (default-program'daki tüm row'lar da aynı gerekçeyle rehberli).",
-  legRaise:
-    "Sırtüstü yatık poz — FormCoach'un supine pozda güvenilir landmark'ı yok (lying makineler de bu yüzden rehberli).",
   dips:
     "Eller arkada, gövde önde; sandalye/masa kenarı kameradan ele/omuza öklüzyon yaratır, dirsek yörüngesi gizlenir.",
   hollowHold:
@@ -142,7 +140,7 @@ export const calisthenicsProgram = {
             tracked("cxA-push-up", "Push-Up", { type: "repRange", min: 8, max: 12 }, "pushup", "Eller göğüs hizasında, boyun kırılmasın, karın sık", { sets: 3 }),
             tracked("cxA-squat", "Bodyweight Squat", { type: "repRange", min: 12, max: 15 }, "squat", "Kalçayı geriye it, dizler içeri çökmesin", { sets: 3 }),
             guided("cxA-pike-pushup", "Pike Push-Up", { type: "repRange", min: 6, max: 10 }, REASON.pikePushup, "Kalçayı yukarı al, başını eller arasına indir, omuza yükle", { sets: 3 }),
-            guided("cxA-glute-bridge", "Glute Bridge", { type: "reps", value: 15 }, REASON.gluteBridge, "Kalçanı yukarıda sık, beli aşırı çukurlaştırma", { sets: 3 }),
+            tracked("cxA-glute-bridge", "Glute Bridge", { type: "reps", value: 15 }, "gluteBridge", "Kalçanı yukarıda sık, beli aşırı çukurlaştırma", { sets: 3 }),
           ],
         },
         {
@@ -165,7 +163,7 @@ export const calisthenicsProgram = {
           type: "warmup",
           label: "Isınma",
           exercises: [
-            guided("cxB-high-knees", "High Knees", { type: "time", seconds: 40 }, REASON.highKnees, "Dizleri kalça hizasına çek, kollar tempoya eşlik etsin"),
+            tracked("cxB-high-knees", "High Knees", { type: "time", seconds: 40 }, "kneeRaise", "Dizleri kalça hizasına çek, kollar tempoya eşlik etsin"),
             tracked("cxB-lunge-warmup", "Lunge", { type: "perSide", value: 8 }, "lunge", "Diz öne fırlamasın, gövde hafif öne eğilsin"),
             guided("cxB-leg-swings", "Leg Swings", { type: "perSide", value: 10 }, REASON.legSwings, "Bacağı öne-arkaya kontrollü salla, gövde sabit"),
             tracked("cxB-knee-raise", "Standing Knee Raise", { type: "perSide", value: 12 }, "kneeRaise", "Dizini kalça hizasına kaldır, gövde dik kalsın"),
@@ -181,14 +179,14 @@ export const calisthenicsProgram = {
             tracked("cxB-lunge", "Lunge", { type: "perSide", value: 10 }, "lunge", "Diz öne fırlamasın, gövde hafif öne eğilsin", { sets: 3 }),
             guided("cxB-inverted-row", "Masa/Bar Row", { type: "repRange", min: 8, max: 12 }, REASON.invertedRow, "Masa kenarına asıl, göğsü kenara çek, gövde tek hat", { sets: 3 }),
             tracked("cxB-split-squat", "Split Squat", { type: "perSide", value: 8 }, "lunge", "Arka diz yere yakın, ön diz parmak ucunu geçmesin", { sets: 3 }),
-            guided("cxB-glute-bridge", "Glute Bridge", { type: "perSide", value: 12 }, REASON.gluteBridge, "Kalçanı yukarıda sık, beli aşırı çukurlaştırma", { sets: 3 }),
+            tracked("cxB-glute-bridge", "Glute Bridge", { type: "perSide", value: 12 }, "gluteBridge", "Kalçanı yukarıda sık, beli aşırı çukurlaştırma", { sets: 3 }),
           ],
         },
         {
           type: "straight",
           label: "Core",
           exercises: [
-            guided("cxB-leg-raise", "Leg Raise", { type: "repRange", min: 10, max: 12 }, REASON.legRaise, "Bel yerden kalkmasın, bacakları kontrollü indir", { sets: 3, restSec: [45, 60] }),
+            tracked("cxB-leg-raise", "Leg Raise", { type: "repRange", min: 10, max: 12 }, "legRaise", "Bel yerden kalkmasın, bacakları kontrollü indir", { sets: 3, restSec: [45, 60] }),
             guided("cxB-hollow-hold", "Hollow Hold", { type: "time", seconds: 25 }, REASON.hollowHold, "Bel yere yapışık, omuzlar ve bacaklar hafif yerden", { sets: 2, restSec: [45, 60] }),
           ],
         },

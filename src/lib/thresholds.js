@@ -88,6 +88,35 @@ export const DEFAULT_TUNINGS = {
     },
   },
 
+  // Glute Bridge — metrik bridgeAngle = 180 - kalça açısı (yön çevirme, jumpingJack tekniği).
+  // Yat (kalça açısı ~110–130, bükük diz ile düz gövde) → bridgeAngle ~50–70 → "standing".
+  // Köprü (kalça açısı ~165–175, gövde-uyluk düz) → bridgeAngle ~5–15 → "bottom" (efor).
+  // Eşikler bridgeAngle uzayında: standingMin yatta erişilmeli, bottomMax tam köprü.
+  gluteBridge: {
+    phases: { standingMin: 50, bottomMax: 25 },
+    attemptBelow: 42,
+    phaseConfirmFrames: 4,
+    faults: {
+      // attemptClose: tepe (en yüksek köprü) = bridgeAngle min; >eşik ise tam köprü değil.
+      depth: { threshold: 25, tolerance: 0 },
+      // bottom fazında bridgeAngle çok düşük (<eşik) = kalça açısı çok büyük = hiperekstansiyon.
+      hyperextension: { threshold: 5, tolerance: 1 },
+    },
+  },
+
+  // Leg Raise — metrik kalça fleksiyonu (omuz→kalça→ayakbileği), squat yönü (çevirme yok).
+  // Bacak yerde (düz) ~160–180 → "standing"; bacak yukarı (dikey) ~90 → "bottom" (efor).
+  legRaise: {
+    phases: { standingMin: 150, bottomMax: 100 },
+    attemptBelow: 135,
+    phaseConfirmFrames: 4,
+    faults: {
+      depth: { threshold: 100, tolerance: 0 },
+      // diz açısı <eşik = bacak aşırı bükük (düz tutulmadı).
+      kneeBend: { threshold: 150, tolerance: 5 },
+    },
+  },
+
   lateralRaise: {
     phases: { standingMin: 150, bottomMax: 100 },
     attemptBelow: 130,

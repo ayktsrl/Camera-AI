@@ -42,7 +42,7 @@ describe("exerciseLibrary — şema bütünlüğü", () => {
     }
   });
 
-  it("takipli hareketler yalnız kayıtlı motorlara bağlı (squat/pushup/lunge + jumpingJack/kneeRaise + Batch 3 dumbbell hepsi P0)", () => {
+  it("takipli hareketler yalnız kayıtlı motorlara bağlı (squat/pushup/lunge + jumpingJack/kneeRaise + Batch 3 dumbbell + Batch 1 kalistenik hepsi P0)", () => {
     const tracked = EXERCISE_LIBRARY.filter((e) => e.trackable);
     expect(tracked.length).toBeGreaterThanOrEqual(5);
     const allowed = [
@@ -55,6 +55,10 @@ describe("exerciseLibrary — şema bütünlüğü", () => {
       "hammerCurl",
       "shoulderPress",
       "plank",
+      // Batch 1 kalistenik gerçek-takip: glute bridge + leg raise yeni motorlar,
+      // high knees kneeRaise motorunu paylaşır (yukarıda zaten allowed).
+      "gluteBridge",
+      "legRaise",
     ];
     expect(tracked.every((e) => allowed.includes(e.ruleSetRef))).toBe(true);
     // Batch 2 aktivasyon dersi: takipli her hareket P0 (canlıda sayar).

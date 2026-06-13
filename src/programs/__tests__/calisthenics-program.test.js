@@ -83,34 +83,46 @@ describe("kalistenik program — şema bütünlüğü", () => {
 });
 
 describe("kalistenik program — takipli vs rehberli dağılım", () => {
-  // Benzersiz ruleSetRef takipli motor kümesi = spec'teki 6 (split squat lunge'a düşer).
-  it("takipli motorlar yalnız mevcut 6 pose-ruleseti", () => {
+  // Batch 1: glute bridge + leg raise yeni motorlarla, high knees kneeRaise'i paylaşır →
+  // takipli ruleSetRef kümesi 6'dan 8'e çıktı (gluteBridge, legRaise eklendi).
+  it("takipli motorlar mevcut pose-rulesetleri (Batch 1 dahil)", () => {
     const tracked = allExercises().filter((e) => isPoseTracked(e));
     const refs = new Set(tracked.map((e) => e.ruleSetRef));
     expect([...refs].sort()).toEqual(
-      ["jumpingJack", "kneeRaise", "lunge", "plank", "pushup", "squat"].sort()
+      [
+        "gluteBridge",
+        "jumpingJack",
+        "kneeRaise",
+        "legRaise",
+        "lunge",
+        "plank",
+        "pushup",
+        "squat",
+      ].sort()
     );
   });
 
-  it("rehberli hareketlerde 10 benzersiz hareket adı (spec dağılımı)", () => {
+  it("rehberli hareketlerde benzersiz hareket adları (Batch 1 sonrası kalanlar)", () => {
     const guided = allExercises().filter((e) => !e.trackable);
     const names = new Set(guided.map((e) => e.name));
-    // glute bridge, mountain climber, leg raise, dips, masa-row, pike push-up,
-    // hollow hold, calf raise, high knees, arm circles (+ leg swings ısınma).
-    expect(names.size).toBeGreaterThanOrEqual(10);
+    // Batch 1'de glute bridge / leg raise / high knees TAKİPLİ oldu → guided'dan çıktı.
+    // Kalan rehberliler: mountain climber, dips, masa-row, pike push-up, hollow hold,
+    // calf raise, arm circles (+ leg swings ısınma).
+    expect(names.size).toBeGreaterThanOrEqual(7);
     for (const want of [
-      "Glute Bridge",
       "Mountain Climber",
-      "Leg Raise",
       "Dips",
       "Masa/Bar Row",
       "Pike Push-Up",
       "Hollow Hold",
       "Calf Raise",
-      "High Knees",
       "Arm Circles",
     ]) {
       expect(names.has(want)).toBe(true);
+    }
+    // Batch 1 takipli oldu → artık rehberli DEĞİL:
+    for (const tracked of ["Glute Bridge", "Leg Raise", "High Knees"]) {
+      expect(names.has(tracked)).toBe(false);
     }
   });
 
@@ -184,10 +196,11 @@ describe("kalistenik program — player tüketimi", () => {
 });
 
 describe("kalistenik program — foto eşleme", () => {
-  it("bundle edilen rehberli hareketlerin fotosu çözülür", async () => {
+  it("bundle edilen hareketlerin fotosu çözülür", async () => {
     const { hasPhotos } = await import("../../lib/exercisePhotos");
     const byName = (n) => allExercises().find((e) => e.name === n);
-    // free-exercise-db'de bulunan + bundle edilenler:
+    // free-exercise-db'de bulunan + bundle edilenler (artık Glute Bridge/Leg Raise takipli
+    // ama fotoları hâlâ bundle'lı — foto çözümü trackable durumundan bağımsız):
     expect(hasPhotos(byName("Glute Bridge"))).toBe(true);
     expect(hasPhotos(byName("Mountain Climber"))).toBe(true);
     expect(hasPhotos(byName("Leg Raise"))).toBe(true);
@@ -195,9 +208,11 @@ describe("kalistenik program — foto eşleme", () => {
     expect(hasPhotos(byName("Masa/Bar Row"))).toBe(true);
     expect(hasPhotos(byName("Calf Raise"))).toBe(true);
     expect(hasPhotos(byName("Arm Circles"))).toBe(true);
-    // Bulunamayanlar → null (placeholder'a düşer):
+    // Batch 1: High Knees artık kneeRaise motorunu paylaşıyor → ruleSetRef üzerinden
+    // standing-knee-raise fotosunu devralır (placeholder yerine gerçek foto).
+    expect(hasPhotos(byName("High Knees"))).toBe(true);
+    // Hâlâ fotosuz → placeholder'a düşer:
     expect(hasPhotos(byName("Pike Push-Up"))).toBe(false);
     expect(hasPhotos(byName("Hollow Hold"))).toBe(false);
-    expect(hasPhotos(byName("High Knees"))).toBe(false);
   });
 });
