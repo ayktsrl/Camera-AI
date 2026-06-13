@@ -11,6 +11,11 @@ import {
 } from "../lib/programPlayer";
 import { createCoach } from "../lib/speech";
 import { readStored, writeStored } from "../lib/storage";
+import {
+  loadCustomPrograms,
+  saveCustomProgram,
+  deleteCustomProgram,
+} from "../lib/customPrograms";
 import { EXERCISES } from "../exercises";
 import GuidedSetScreen from "../components/GuidedSetScreen";
 import PoseSetScreen from "../components/PoseSetScreen";
@@ -19,6 +24,7 @@ import DaySummary from "../components/DaySummary";
 import ExercisePreview from "../components/ExercisePreview";
 import AnnounceScreen from "../components/AnnounceScreen";
 import CountdownScreen from "../components/CountdownScreen";
+import ProgramBuilder from "./ProgramBuilder";
 
 // Gün satırı için "ne yapacağım" önizleme şeridi: bloklardaki hareketleri
 // (aynı id tekrarını eleyerek) düzleştirir. Saf görsel — akışa dokunmaz.
@@ -79,12 +85,39 @@ export default function ProgramMode({ onExit }) {
   const [paused, setPaused] = useState(false);
   const [nextDayId] = useState(() => pickNextDayId(ownerProgram.days));
 
-  function startDay(dayId) {
+  // Özel programlar — localStorage'dan yüklenir, builder ekledikçe güncellenir.
+  const [customPrograms, setCustomPrograms] = useState(() =>
+    loadCustomPrograms()
+  );
+  // builder ekranı: null (kapalı) | { editing } — editing null ise yeni program.
+  const [builder, setBuilder] = useState(null);
+
+  // Aktif seansın program'ı — gün tamamlanınca geçmiş yazımı için (sadece owner takip eder).
+  const [activeProgram, setActiveProgram] = useState(null);
+
+  function startDay(dayId, program = ownerProgram) {
     // Hands-free: tüm seans dokunmasız akar (ANNOUNCE → COUNTDOWN → … → DONE).
-    const next = createWorkoutSession(ownerProgram, dayId, { handsFree: true });
+    const next = createWorkoutSession(program, dayId, { handsFree: true });
     setSession(next);
     setPlayerState(next.getState());
+    setActiveProgram(program);
     setPaused(false);
+  }
+
+  // Özel program "Başla": tek günlük (day1), aynı hands-free motorla.
+  function startCustom(program) {
+    startDay("day1", program);
+  }
+
+  // Builder kaydetti → localStorage'a yaz, listeyi tazele, "start" ise hemen başla.
+  function handleBuilderSave(program, action) {
+    setCustomPrograms(saveCustomProgram(program));
+    setBuilder(null);
+    if (action === "start") startCustom(program);
+  }
+
+  function handleDeleteCustom(id) {
+    setCustomPrograms(deleteCustomProgram(id));
   }
 
   function exitToDays() {
@@ -138,7 +171,11 @@ export default function ProgramMode({ onExit }) {
   }
 
   // Gün tamamlandığında geçmişe işle (gün seçimi "sırada" imi için).
-  const doneDayId = playerState?.status === "done" ? playerState.day.id : null;
+  // Yalnız owner programının günleri "sırada" mantığını besler; özel programlarda yok.
+  const doneDayId =
+    playerState?.status === "done" && activeProgram?.id === ownerProgram.id
+      ? playerState.day.id
+      : null;
   useEffect(() => {
     if (!doneDayId) return;
     const history = readStored(STORAGE_KEYS.history, {});
@@ -147,7 +184,15 @@ export default function ProgramMode({ onExit }) {
   }, [doneDayId]);
 
   let content;
-  if (!playerState) {
+  if (builder) {
+    content = (
+      <ProgramBuilder
+        editing={builder.editing}
+        onSave={handleBuilderSave}
+        onCancel={() => setBuilder(null)}
+      />
+    );
+  } else if (!playerState) {
     content = (
       <section className="day-select">
         <p className="program-kicker">{ownerProgram.name}</p>
@@ -196,6 +241,67 @@ export default function ProgramMode({ onExit }) {
           {ownerProgram.generalRules.plank.perWeek} gün, kardiyo sonrası{" "}
           {ownerProgram.generalRules.plank.sets} set max
         </p>
+
+        {/* Özel programlar — kullanıcının kendi kurdukları */}
+        <div className="custom-section">
+          <p className="program-kicker custom-kicker">Kendi programların</p>
+          {customPrograms.length > 0 && (
+            <ul className="day-list">
+              {customPrograms.map((program) => (
+                <li key={program.id} className="custom-row-wrap">
+                  <button
+                    type="button"
+                    className="day-row custom-row"
+                    onClick={() => startCustom(program)}
+                  >
+                    <span className="day-row-head">
+                      <span className="day-row-label">{program.name}</span>
+                      <span className="day-row-meta">
+                        {countDayExercises(program.days[0])} hareket · ~
+                        {estimateDayMinutes(program.days[0])} dk
+                      </span>
+                    </span>
+                    <span className="day-preview-strip" aria-hidden="true">
+                      {program.days[0].blocks
+                        .flatMap((b) => b.exercises)
+                        .slice(0, 6)
+                        .map((ex) => (
+                          <ExercisePreview
+                            key={ex.id}
+                            exercise={ex}
+                            size="strip"
+                          />
+                        ))}
+                    </span>
+                  </button>
+                  <span className="custom-row-actions">
+                    <button
+                      type="button"
+                      className="mode"
+                      onClick={() => setBuilder({ editing: program })}
+                    >
+                      Düzenle
+                    </button>
+                    <button
+                      type="button"
+                      className="mode mode-del"
+                      onClick={() => handleDeleteCustom(program.id)}
+                    >
+                      Sil
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button
+            type="button"
+            className="btn btn-ghost builder-open"
+            onClick={() => setBuilder({ editing: null })}
+          >
+            + Program ekle
+          </button>
+        </div>
       </section>
     );
   } else if (playerState.status === "done") {
