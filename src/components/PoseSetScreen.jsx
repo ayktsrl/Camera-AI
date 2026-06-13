@@ -13,10 +13,21 @@ import {
 } from "../lib/programPlayer";
 import ExercisePreview from "./ExercisePreview";
 
-export default function PoseSetScreen({ slot, coach, onComplete }) {
+// >45 sn yokluk → TEK nazik sesli hatırlatma (owner kararı). Sonra sessiz.
+const ABSENCE_REMINDER_MS = 45000;
+
+export default function PoseSetScreen({
+  slot,
+  coach,
+  onComplete,
+  repVoice = true,
+  paused = false,
+  handsFree = false,
+}) {
   const { exercise, block } = slot;
   const exerciseDef = getExercise(exercise.ruleSetRef);
   const target = doseTargetReps(exercise.dose);
+  const cameraHint = exerciseDef.cameraHint ?? "Kamera: 45° çapraz, ~2 m";
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -26,10 +37,21 @@ export default function PoseSetScreen({ slot, coach, onComplete }) {
   const startedRef = useRef(false);
   const doneRef = useRef(false);
 
+  // Akıllı duraklama: kullanıcı kareden çıkınca sayım sessizce durur (motor
+  // zaten frame=null'da ilerlemez); >45 sn yoklukta TEK nazik ses.
+  const absenceSinceRef = useRef(null);
+  const reminderFiredRef = useRef(false);
+
+  // Tekrar sayımı sesi ayardan kapatılabilir (varsayılan açık) — owner kararı 1.
+  const repVoiceRef = useRef(repVoice);
+  useEffect(() => {
+    repVoiceRef.current = repVoice;
+  }, [repVoice]);
+
   const handleCoachEvent = useCallback(
     (event) => {
       if (event.type === "rep") {
-        coach.sayCount(event.count);
+        if (repVoiceRef.current) coach.sayCount(event.count);
       } else if (event.type === "warning") {
         coach.say(event.speech, { key: event.rule });
       }
@@ -47,7 +69,12 @@ export default function PoseSetScreen({ slot, coach, onComplete }) {
     warningSeverity,
     setSummary,
     repFlash,
-  } = useRepCounter({ exercise: exerciseDef, running, onEvent: handleCoachEvent });
+  } = useRepCounter({
+    exercise: exerciseDef,
+    // Pause veya akıllı-duraklama → motor beslenmez (sayım sessizce donar).
+    running: running && !paused,
+    onEvent: handleCoachEvent,
+  });
 
   const { status, errorMessage, hasActiveUser } = usePoseTracking({
     videoRef,
@@ -62,6 +89,26 @@ export default function PoseSetScreen({ slot, coach, onComplete }) {
     reset();
     setRunning(true);
   }, [status, reset]);
+
+  // Akıllı duraklama: kullanıcı kareden çıkınca süreyi izle; 45 sn'de TEK ses.
+  useEffect(() => {
+    if (paused || status !== "ready") return;
+    if (hasActiveUser) {
+      absenceSinceRef.current = null;
+      reminderFiredRef.current = false;
+      return undefined;
+    }
+    // Kullanıcı yok — sayaç başlat, 45 sn'de tek hatırlatma.
+    if (absenceSinceRef.current == null) absenceSinceRef.current = Date.now();
+    const timer = setInterval(() => {
+      if (reminderFiredRef.current || absenceSinceRef.current == null) return;
+      if (Date.now() - absenceSinceRef.current >= ABSENCE_REMINDER_MS) {
+        reminderFiredRef.current = true;
+        coach.announce("Hazır olduğunda devam edelim", { interrupt: true });
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [hasActiveUser, paused, status, coach]);
 
   const finish = useCallback(() => {
     if (doneRef.current) return;
@@ -96,8 +143,11 @@ export default function PoseSetScreen({ slot, coach, onComplete }) {
     stageNotice = "Model yükleniyor…";
   } else if (status === "error") {
     stageNotice = errorMessage;
+  } else if (paused) {
+    stageNotice = "Duraklatıldı";
   } else if (running && !hasActiveUser) {
-    stageNotice = "Kullanıcı bekleniyor — kameranın karşısına geç";
+    // Akıllı duraklama — sessiz nötr im (owner: "demeden bekle").
+    stageNotice = "Bekleniyor…";
   }
 
   return (
@@ -138,7 +188,7 @@ export default function PoseSetScreen({ slot, coach, onComplete }) {
         </p>
         <div className="player-exercise-head">
           {/* Kamera ana sahne — önizleme küçük (sm) kalır, kamerayı ezmez. */}
-          <ExercisePreview exercise={exercise} size="sm" asLink />
+          <ExercisePreview exercise={exercise} size="sm" />
           <h2 className="player-exercise">{exercise.name}</h2>
         </div>
         {exercise.coachNote && (
@@ -150,17 +200,21 @@ export default function PoseSetScreen({ slot, coach, onComplete }) {
         </p>
 
         <div className="player-links">
-          <span className="meta-hint">Kamera: 45° çapraz, ~2 m</span>
+          <span className="meta-hint">{cameraHint}</span>
         </div>
 
-        <button
-          type="button"
-          className="btn btn-stop set-done"
-          onClick={finish}
-          disabled={status === "loading"}
-        >
-          Seti bitir{repCount > 0 && faultyCount > 0 ? ` (${faultyCount} hatalı)` : ""}
-        </button>
+        {/* Hands-free'de akışı tek Duraklat butonu (ProgramMode) yönetir;
+            manuel "Seti bitir" yalnız klasik (handsFree=false) modda. */}
+        {!handsFree && (
+          <button
+            type="button"
+            className="btn btn-stop set-done"
+            onClick={finish}
+            disabled={status === "loading"}
+          >
+            Seti bitir{repCount > 0 && faultyCount > 0 ? ` (${faultyCount} hatalı)` : ""}
+          </button>
+        )}
       </div>
     </section>
   );

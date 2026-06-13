@@ -164,19 +164,30 @@ export function estimateDayMinutes(day) {
 /**
  * Antrenman oturumu — tek günlük akış state machine'i.
  *
- * Durumlar: "exercise" (set yapılıyor) → completeSet() →
- *           "rest" (restAfterSec > 0 ise) → finishRest() →
- *           sonraki slot … son slot → "done".
+ * Klasik (handsFree=false, geriye uyum):
+ *   "exercise" → completeSet() → "rest" (varsa) → finishRest() → sonraki slot → "done".
+ *
+ * Hands-free (handsFree=true): her slot iki ön durum kazanır
+ *   "announce" (sesli "Sıradaki: X" + önizleme) → advancePhase() →
+ *   "countdown" (sesli 3-2-1) → advancePhase() →
+ *   "exercise" → completeSet() → "rest" → finishRest() → sonraki slot "announce" → "done".
+ * Zamanlama (anons/3-2-1/rest geri sayım) React tarafında; motor saf kalır.
+ *
+ * @param {object} options { handsFree?: boolean }
  */
-export function createWorkoutSession(program, dayId) {
+export function createWorkoutSession(program, dayId, options = {}) {
+  const { handsFree = false } = options;
   const day = program.days.find((d) => d.id === dayId);
   if (!day) throw new Error(`Bilinmeyen gün: ${dayId}`);
 
   const slots = buildSlots(day);
   const log = [];
 
+  // Yeni slota giriş durumu: hands-free'de "announce", klasikte "exercise".
+  const entryStatus = handsFree ? "announce" : "exercise";
+
   let index = 0;
-  let status = slots.length > 0 ? "exercise" : "done";
+  let status = slots.length > 0 ? entryStatus : "done";
   let rest = null; // { seconds, rangeSec } — status === "rest" iken
 
   function getState() {
@@ -184,6 +195,8 @@ export function createWorkoutSession(program, dayId) {
     return {
       status,
       day,
+      handsFree,
+      // announce/countdown/exercise hepsi aktif slotu gösterir; done → null.
       slot: status === "done" ? null : slot,
       // Dinlenme sırasında index hâlâ biten sette — sıradaki hareket bir sonraki.
       nextSlot: status === "rest" ? (slots[index + 1] ?? null) : null,
@@ -192,6 +205,19 @@ export function createWorkoutSession(program, dayId) {
       completedSets: log.length,
       rest,
     };
+  }
+
+  /**
+   * Hands-free ön durum ilerletici: announce → countdown → exercise.
+   * Zamanlayıcı (anons/3-2-1 bitti) bunu çağırır. Diğer durumlarda no-op.
+   */
+  function advancePhase() {
+    if (status === "announce") {
+      status = "countdown";
+    } else if (status === "countdown") {
+      status = "exercise";
+    }
+    return getState();
   }
 
   /**
@@ -233,7 +259,9 @@ export function createWorkoutSession(program, dayId) {
       return getState();
     }
 
+    // Dinlenmesiz sonraki slot — hands-free'de anonsla başlar.
     index += 1;
+    status = entryStatus;
     return getState();
   }
 
@@ -242,7 +270,7 @@ export function createWorkoutSession(program, dayId) {
     if (status !== "rest") return getState();
     rest = null;
     index += 1;
-    status = "exercise";
+    status = entryStatus;
     return getState();
   }
 
@@ -276,5 +304,13 @@ export function createWorkoutSession(program, dayId) {
     };
   }
 
-  return { getState, completeSet, finishRest, getDaySummary, slots, day };
+  return {
+    getState,
+    advancePhase,
+    completeSet,
+    finishRest,
+    getDaySummary,
+    slots,
+    day,
+  };
 }

@@ -17,17 +17,20 @@ import PoseSetScreen from "../components/PoseSetScreen";
 import RestScreen from "../components/RestScreen";
 import DaySummary from "../components/DaySummary";
 import ExercisePreview from "../components/ExercisePreview";
+import AnnounceScreen from "../components/AnnounceScreen";
+import CountdownScreen from "../components/CountdownScreen";
 
 // Gün satırı için "ne yapacağım" önizleme şeridi: bloklardaki hareketleri
-// (aynı videoUrl tekrarını eleyerek) düzleştirir. Saf görsel — akışa dokunmaz.
+// (aynı id tekrarını eleyerek) düzleştirir. Saf görsel — akışa dokunmaz.
+// (Dedup artık id'ye bakar; videoUrl UI'dan koparıldı — owner: "link falan koyma".)
 const PREVIEW_STRIP_MAX = 6;
 function dayPreviewExercises(day) {
   const seen = new Set();
   const out = [];
   for (const block of day.blocks) {
     for (const ex of block.exercises) {
-      if (seen.has(ex.videoUrl)) continue;
-      seen.add(ex.videoUrl);
+      if (seen.has(ex.id)) continue;
+      seen.add(ex.id);
       out.push(ex);
     }
   }
@@ -36,6 +39,7 @@ function dayPreviewExercises(day) {
 
 const STORAGE_KEYS = {
   voice: "formcoach_voice_v1",
+  repVoice: "formcoach_rep_voice_v1", // tekrar sayımı sesi (varsayılan açık)
   history: "formcoach_program_history_v1", // { [dayId]: ISO tarih } — son tamamlanma
 };
 
@@ -61,20 +65,33 @@ export default function ProgramMode({ onExit }) {
     writeStored(STORAGE_KEYS.voice, voiceOn);
   }, [coach, voiceOn]);
 
+  // Tekrar sayımı sesi — owner kararı 1: varsayılan AÇIK, ayardan kapatılabilir.
+  const [repVoiceOn, setRepVoiceOn] = useState(() =>
+    readStored(STORAGE_KEYS.repVoice, true)
+  );
+  useEffect(() => {
+    writeStored(STORAGE_KEYS.repVoice, repVoiceOn);
+  }, [repVoiceOn]);
+
   // session: mutable akış motoru (stabil nesne); playerState: render snapshot'ı.
   const [session, setSession] = useState(null);
   const [playerState, setPlayerState] = useState(null);
+  const [paused, setPaused] = useState(false);
   const [nextDayId] = useState(() => pickNextDayId(ownerProgram.days));
 
   function startDay(dayId) {
-    const next = createWorkoutSession(ownerProgram, dayId);
+    // Hands-free: tüm seans dokunmasız akar (ANNOUNCE → COUNTDOWN → … → DONE).
+    const next = createWorkoutSession(ownerProgram, dayId, { handsFree: true });
     setSession(next);
     setPlayerState(next.getState());
+    setPaused(false);
   }
 
   function exitToDays() {
+    if (coach.isSupported) coach.setEnabled(voiceOn); // kuyruğu temizle
     setSession(null);
     setPlayerState(null);
+    setPaused(false);
   }
 
   function handleCompleteSet(result) {
@@ -85,20 +102,40 @@ export default function ProgramMode({ onExit }) {
     setPlayerState(session.finishRest());
   }
 
-  // Hoca notu — her set başında BİR kez sesli (cooldown'suz announce; slot
-  // değişimi anahtardır, aynı set içinde tekrarlanmaz).
-  const announceKey =
-    playerState?.status === "exercise" ? playerState.slotIndex : null;
-  const announceText =
-    playerState?.status === "exercise" && playerState.slot
-      ? playerState.slot.exercise.coachNote
-        ? `${playerState.slot.exercise.name}. ${playerState.slot.exercise.coachNote}`
-        : playerState.slot.exercise.name
-      : null;
-  useEffect(() => {
-    if (announceKey == null || !announceText) return;
-    coach.announce(announceText);
-  }, [coach, announceKey, announceText]);
+  // Hands-free ön durum ilerletici (ANNOUNCE → COUNTDOWN → EXERCISE).
+  function handleAdvancePhase() {
+    setPlayerState(session.advancePhase());
+  }
+
+  function togglePause() {
+    setPaused((p) => {
+      const next = !p;
+      // Duraklatınca konuşmayı sustur; devam edince ses ayarını geri ver.
+      if (next) coach.setEnabled(false);
+      else coach.setEnabled(voiceOn);
+      return next;
+    });
+  }
+
+  // Bir sonraki harekete atla — aktif seti atlanmış olarak loglar, akış sürer.
+  function skipSlot() {
+    if (!session || playerState?.status === "done") return;
+    setPaused(false);
+    coach.setEnabled(voiceOn);
+    // announce/countdown'da set henüz başlamadı → completeSet exercise dışında
+    // no-op olur; bu yüzden önce exercise'e ilerlet, sonra atlanmış logla.
+    let s = session.getState();
+    while (s.status === "announce" || s.status === "countdown") {
+      s = session.advancePhase();
+    }
+    if (s.status === "exercise") {
+      setPlayerState(session.completeSet({ reps: null, skipped: true }));
+    } else if (s.status === "rest") {
+      setPlayerState(session.finishRest());
+    } else {
+      setPlayerState(s);
+    }
+  }
 
   // Gün tamamlandığında geçmişe işle (gün seçimi "sırada" imi için).
   const doneDayId = playerState?.status === "done" ? playerState.day.id : null;
@@ -175,7 +212,28 @@ export default function ProgramMode({ onExit }) {
         rest={playerState.rest}
         nextSlot={playerState.nextSlot}
         coach={coach}
+        paused={paused}
         onDone={handleFinishRest}
+      />
+    );
+  } else if (playerState.status === "announce") {
+    content = (
+      <AnnounceScreen
+        key={`announce-${playerState.slotIndex}`}
+        slot={playerState.slot}
+        coach={coach}
+        paused={paused}
+        onDone={handleAdvancePhase}
+      />
+    );
+  } else if (playerState.status === "countdown") {
+    content = (
+      <CountdownScreen
+        key={`countdown-${playerState.slotIndex}`}
+        slot={playerState.slot}
+        coach={coach}
+        paused={paused}
+        onDone={handleAdvancePhase}
       />
     );
   } else {
@@ -189,12 +247,17 @@ export default function ProgramMode({ onExit }) {
         slot={slot}
         coach={coach}
         onComplete={handleCompleteSet}
+        repVoice={repVoiceOn}
+        paused={paused}
+        handsFree={playerState.handsFree}
       />
     ) : (
       <GuidedSetScreen
         key={`set-${playerState.slotIndex}`}
         slot={slot}
         onComplete={handleCompleteSet}
+        paused={paused}
+        handsFree={playerState.handsFree}
       />
     );
   }
@@ -222,6 +285,15 @@ export default function ProgramMode({ onExit }) {
           <button
             type="button"
             className="mode"
+            onClick={() => setRepVoiceOn((v) => !v)}
+            aria-pressed={repVoiceOn}
+            title="Tekrar sayımını sesli oku"
+          >
+            {repVoiceOn ? "Sayım açık" : "Sayım kapalı"}
+          </button>
+          <button
+            type="button"
+            className="mode"
             onClick={() => setVoiceOn((v) => !v)}
             aria-pressed={voiceOn}
           >
@@ -236,6 +308,45 @@ export default function ProgramMode({ onExit }) {
         </p>
       )}
       {content}
+
+      {/* Tek kalıcı kontrol — akışı yalnız bu böler (tam-ekran tap YOK). */}
+      {inWorkout && (
+        <div className="handsfree-control">
+          {paused ? (
+            <div className="handsfree-paused">
+              <button
+                type="button"
+                className="btn btn-start handsfree-resume"
+                onClick={togglePause}
+              >
+                Devam et
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={skipSlot}
+              >
+                Atla
+              </button>
+              <button
+                type="button"
+                className="btn btn-stop"
+                onClick={exitToDays}
+              >
+                Bitir
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-stop handsfree-pause"
+              onClick={togglePause}
+            >
+              Duraklat
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

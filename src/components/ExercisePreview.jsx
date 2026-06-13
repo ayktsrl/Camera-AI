@@ -1,59 +1,14 @@
-// Hareket önizlemesi — küçük 16:9 YouTube thumbnail'ı.
-// Graceful fallback: thumbnail yoksa (ID yok) veya yüklenemezse (offline)
-// hareket adının baş harfini taşıyan nötr kireç-zemin placeholder gösterir.
-// KIRIK resim ikonu asla görünmez. Lazy load + saf <img>, ağır bağımlılık yok.
+// Hareket önizlemesi — in-app statik hedef-poz silüeti (PosePreview).
+// YouTube thumbnail / dış link / "▶ İzle" TAMAMEN kaldırıldı (owner: "link falan koyma").
+// Önizleme offline + telif-temiz; veri tarafındaki videoUrl arşivde kalır ama UI okumaz.
+// API geriye uyumlu: size aynı; asLink prop'u artık YOK SAYILIR (kademeli temizlik).
 
-import { useState } from "react";
-import { thumbUrl } from "../lib/videoThumb";
-
-function initialOf(name) {
-  const ch = (name ?? "").trim().charAt(0);
-  return ch ? ch.toLocaleUpperCase("tr-TR") : "•";
-}
+import PosePreview from "./PosePreview";
 
 /**
- * @param {object}  exercise  - { name, videoUrl }
- * @param {string}  size      - "sm" (liste) | "md" (set ekranı), varsayılan "md"
- * @param {boolean} asLink    - true ise dokununca videoyu yeni sekmede açar
+ * @param {object} exercise - { name, ruleSetRef }
+ * @param {string} size     - "strip" (liste) | "sm" (pose ekranı) | "md" (rehberli), varsayılan "md"
  */
-export default function ExercisePreview({ exercise, size = "md", asLink = false }) {
-  const src = thumbUrl(exercise.videoUrl);
-  const [broken, setBroken] = useState(false);
-  const showImage = src && !broken;
-
-  const media = showImage ? (
-    <img
-      className="exercise-preview-img"
-      src={src}
-      alt=""
-      loading="lazy"
-      decoding="async"
-      onError={() => setBroken(true)}
-    />
-  ) : (
-    <span className="exercise-preview-fallback" aria-hidden="true">
-      {initialOf(exercise.name)}
-    </span>
-  );
-
-  const className = `exercise-preview exercise-preview--${size}`;
-
-  if (asLink && exercise.videoUrl) {
-    return (
-      <a
-        className={`${className} exercise-preview--link`}
-        href={exercise.videoUrl}
-        target="_blank"
-        rel="noreferrer"
-        aria-label={`${exercise.name} videosunu izle`}
-      >
-        {media}
-        <span className="exercise-preview-play" aria-hidden="true">
-          ▶ İzle
-        </span>
-      </a>
-    );
-  }
-
-  return <span className={className}>{media}</span>;
+export default function ExercisePreview({ exercise, size = "md" }) {
+  return <PosePreview exercise={exercise} size={size} />;
 }

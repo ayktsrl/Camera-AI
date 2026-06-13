@@ -15,6 +15,17 @@ import { createFaultRuleEngine } from "./faultRules";
 const METRICS_LOST_RESET_FRAMES = 30;
 
 export function createRepEngine(exercise) {
+  // Faz kararının sürüldüğü açı + eşikler. exercise.tracking varsa oradan;
+  // yoksa geriye uyum için eski squat yolu (kneeAngle + exercise.phases).
+  const tracking = exercise.tracking ?? {
+    primaryMetric: "kneeAngle",
+    phases: exercise.phases,
+    attemptBelow: exercise.attemptBelow,
+  };
+  const primaryMetric = tracking.primaryMetric ?? "kneeAngle";
+  const phases = tracking.phases ?? exercise.phases;
+  const attemptBelow = tracking.attemptBelow ?? exercise.attemptBelow;
+
   const attemptCloseRules = (exercise.faultRules ?? []).filter((r) =>
     (r.phases ?? []).includes("attemptClose")
   );
@@ -38,11 +49,11 @@ export function createRepEngine(exercise) {
     };
   }
 
-  function rawPhaseFor(kneeAngle) {
-    const { standingMin, bottomMax } = exercise.phases;
+  function rawPhaseFor(angle) {
+    const { standingMin, bottomMax } = phases;
 
-    if (kneeAngle >= standingMin) return "standing";
-    if (kneeAngle <= bottomMax) return "bottom";
+    if (angle >= standingMin) return "standing";
+    if (angle <= bottomMax) return "bottom";
 
     // Ara bant: yön mevcut onaylı faza göre belirlenir.
     if (state.confirmedPhase === "bottom" || state.confirmedPhase === "ascent") {
@@ -56,10 +67,10 @@ export function createRepEngine(exercise) {
     if (!attempt) return;
     state.attempt = null;
 
-    const { bottomMax } = exercise.phases;
+    const { bottomMax } = phases;
 
-    if (attempt.minKneeAngle <= bottomMax) {
-      // Tam tekrar — dibe inildi ve ayağa dönüldü.
+    if (attempt.minAngle <= bottomMax) {
+      // Tam tekrar — dibe inildi ve başlangıç pozuna dönüldü.
       state.repCount += 1;
       state.lastRepAt = timestamp;
       const faults = [...attempt.violations];
@@ -69,7 +80,7 @@ export function createRepEngine(exercise) {
       return;
     }
 
-    if (attempt.minKneeAngle <= exercise.attemptBelow) {
+    if (attempt.minAngle <= attemptBelow) {
       // Belirgin iniş var ama dibe ulaşılmadı → derinlik hatası, sayılmaz.
       state.faultyCount += 1;
       state.depthFires += 1;
@@ -84,14 +95,14 @@ export function createRepEngine(exercise) {
     // attemptBelow'un üstünde kalan ufak diz bükmeleri sessizce yok sayılır.
   }
 
-  function transitionTo(phase, events, timestamp, kneeAngle) {
+  function transitionTo(phase, events, timestamp, angle) {
     const prev = state.confirmedPhase;
     state.confirmedPhase = phase;
     state.candidatePhase = null;
     state.candidateFrames = 0;
 
     if (prev === "standing" && phase === "descent") {
-      state.attempt = { minKneeAngle: kneeAngle, violations: new Set() };
+      state.attempt = { minAngle: angle, violations: new Set() };
     }
 
     if (phase === "standing") {
@@ -151,16 +162,14 @@ export function createRepEngine(exercise) {
     }
 
     state.metricsLostFrames = 0;
-    const { kneeAngle } = metrics;
+    const angle = metrics[primaryMetric];
+    if (angle == null) return events; // faz açısı bu frame'de yok — bekle
 
     updateCalibration(metrics, frame.landmarks);
 
     // Deneme boyunca en derin nokta takip edilir.
     if (state.attempt) {
-      state.attempt.minKneeAngle = Math.min(
-        state.attempt.minKneeAngle,
-        kneeAngle
-      );
+      state.attempt.minAngle = Math.min(state.attempt.minAngle, angle);
     }
 
     // Form kuralları — kural-bilinçsiz genel döngü.
@@ -183,7 +192,7 @@ export function createRepEngine(exercise) {
     }
 
     // Faz adayı + confirm-frames debounce.
-    const candidate = rawPhaseFor(kneeAngle);
+    const candidate = rawPhaseFor(angle);
 
     if (candidate === state.confirmedPhase) {
       state.candidatePhase = null;
@@ -199,7 +208,7 @@ export function createRepEngine(exercise) {
     }
 
     if (state.candidateFrames >= exercise.phaseConfirmFrames) {
-      transitionTo(candidate, events, timestamp, kneeAngle);
+      transitionTo(candidate, events, timestamp, angle);
     }
 
     return events;

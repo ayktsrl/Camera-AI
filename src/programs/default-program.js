@@ -65,7 +65,7 @@ export const ownerProgram = {
             coachNote: "Eller göğüs hizasında, boyun kırılmasın, karın sık",
             videoUrl: "https://www.youtube.com/watch?v=tmtgHxtyTkE", embeddable: true,
             sets: 4, dose: { type: "reps", value: 12 },
-            trackable: true, trackingPhase: "P1", ruleSetRef: "pushup", untrackableReason: null },
+            trackable: true, trackingPhase: "P0", ruleSetRef: "pushup", untrackableReason: null },
         ]},
         { type: "superset", label: "Superset B", rounds: 4,
           restBetweenExercisesSec: 0, restAfterRoundSec: 60, exercises: [

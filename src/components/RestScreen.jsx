@@ -24,7 +24,7 @@ function beep(audioCtxRef) {
   }
 }
 
-export default function RestScreen({ rest, nextSlot, coach, onDone }) {
+export default function RestScreen({ rest, nextSlot, coach, onDone, paused = false }) {
   const [left, setLeft] = useState(rest.seconds);
   const audioCtxRef = useRef(null);
   const doneRef = useRef(false);
@@ -32,22 +32,33 @@ export default function RestScreen({ rest, nextSlot, coach, onDone }) {
   const canExtend =
     Array.isArray(rest.rangeSec) && rest.rangeSec[1] > rest.rangeSec[0];
 
+  // Dinlenme başında süreyi bir kez sesli söyle.
+  useEffect(() => {
+    coach.announce(`${rest.seconds} saniye dinlen`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function finish() {
     if (doneRef.current) return;
     doneRef.current = true;
-    coach.announce("Başla", { interrupt: true });
+    coach.announce("Hazır ol, başlıyoruz", { interrupt: true });
     onDone();
   }
 
+  // Geri sayım — pause'da donar.
   useEffect(() => {
+    if (paused) return undefined;
     const interval = setInterval(() => {
       setLeft((l) => l - 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [paused]);
 
   useEffect(() => {
-    if (left > 0 && left <= 3) beep(audioCtxRef);
+    if (left > 0 && left <= 3) {
+      beep(audioCtxRef);
+      coach.sayCount(left);
+    }
     if (left <= 0) finish();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [left]);

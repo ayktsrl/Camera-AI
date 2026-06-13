@@ -70,9 +70,16 @@ function reliableHeelYs(lm) {
 export const squat = {
   id: "squat",
   name: "Squat",
+  cameraHint: "Kamera: 45° çapraz, ~2 m",
 
-  // Faz eşikleri (diz açısı, derece) — 3D diz açısıyla yeniden doğrulanacak,
-  // başlangıç değerleri v0.1 ile aynı (spec §2.4).
+  // Rep FSM yapılandırması (genel motor bunu okur): faz kararı diz açısından sürülür.
+  tracking: {
+    primaryMetric: "kneeAngle",
+    phases: { standingMin: 160, bottomMax: 100 },
+    attemptBelow: 140,
+  },
+
+  // Faz eşikleri (diz açısı, derece) — geriye uyum için tutulur (tracking ile aynı).
   phases: {
     standingMin: 160, // ayakta: diz açısı > 160°
     bottomMax: 100, // dipte: diz açısı < 100°

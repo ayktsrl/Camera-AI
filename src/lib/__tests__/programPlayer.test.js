@@ -353,7 +353,7 @@ describe("ownerProgram veri bütünlüğü (spec Ek-A)", () => {
     expect(closed.map((e) => e.id).sort()).toEqual(["lunge-lateral", "squat-press"]);
   });
 
-  it("P0 squat slotları: BW squat ısınmaları, squat+press, barbell squat", () => {
+  it("P0 takip slotları: squat ailesi + push-up (Dalga 1'de P0'a terfi)", () => {
     const all = ownerProgram.days.flatMap((d) =>
       d.blocks.flatMap((b) => b.exercises)
     );
@@ -362,9 +362,11 @@ describe("ownerProgram veri bütünlüğü (spec Ek-A)", () => {
       "barbell-squat",
       "bw-squat-warmup",
       "bw-squat-warmup-4",
+      "push-up",
       "squat-press",
     ]);
-    expect(p0.every((e) => e.ruleSetRef === "squat")).toBe(true);
+    // squat ailesi squat motoruna, push-up kendi pushup motoruna bağlı.
+    expect(p0.every((e) => ["squat", "pushup"].includes(e.ruleSetRef))).toBe(true);
   });
 
   it("genel kurallar: kardiyo 30/40 dk 110–130 bpm, plank 3×max, dinlenme bandı 60–90", () => {

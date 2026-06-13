@@ -649,9 +649,9 @@ body,
   border-bottom-color: var(--accent);
 }
 
-/* Hareket önizlemesi — 16:9 thumbnail, hairline çerçeve, hafif yuvarlak köşe.
+/* İn-app hedef-poz silüeti — dış görsel/link yok, kendi çizimimiz (offline).
    Üç boyut: strip (gün satırı), sm (pose paneli), md (rehberli set ekranı). */
-.exercise-preview {
+.pose-preview {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -661,72 +661,26 @@ body,
   border: 1px solid var(--hairline);
   border-radius: 6px;
   background: var(--ink-raise);
-  text-decoration: none;
+  color: var(--accent);
   position: relative;
 }
 
-.exercise-preview--strip {
+.pose-preview--strip {
   width: 72px;
 }
 
-.exercise-preview--sm {
+.pose-preview--sm {
   width: 96px;
 }
 
-.exercise-preview--md {
+.pose-preview--md {
   width: 132px;
 }
 
-.exercise-preview-img {
+.pose-preview-svg {
   width: 100%;
   height: 100%;
-  object-fit: cover;
   display: block;
-}
-
-/* Kırık resim ikonu yerine: nötr kireç-zemin baş harfi */
-.exercise-preview-fallback {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(200, 242, 78, 0.1);
-  color: var(--accent);
-  font-weight: 700;
-  font-size: 1.1rem;
-  letter-spacing: -0.02em;
-}
-
-/* Tek affordance — thumbnail + "▶ İzle" etiketi (md/sm linkli kullanımda) */
-.exercise-preview--link {
-  cursor: pointer;
-  transition: border-color 140ms ease;
-}
-
-.exercise-preview--link:hover {
-  border-color: var(--accent);
-}
-
-.exercise-preview--link:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.exercise-preview-play {
-  position: absolute;
-  inset: auto 0 0 0;
-  padding: 3px 6px;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--paper);
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.72), transparent);
-  text-align: center;
-}
-
-.exercise-preview--link:hover .exercise-preview-play {
-  color: var(--accent);
 }
 
 /* Rehberli set ekranı: önizleme satırı (eski .player-links yerine) */
@@ -784,6 +738,17 @@ body,
 /* Süre dozu (stretch / jumping jack) */
 .hold-timer {
   margin-top: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.hold-timer-label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .hold-timer-count {
@@ -791,6 +756,97 @@ body,
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+}
+
+/* --- Hands-free: ANNOUNCE + COUNTDOWN durum ekranları --- */
+.player--announce,
+.player--countdown {
+  text-align: center;
+}
+
+.announce-kicker {
+  margin-top: 8px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.announce-title {
+  font-size: clamp(28px, 7vw, 44px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 4px 0 8px;
+}
+
+.announce-preview {
+  margin: 22px auto 14px;
+  display: flex;
+  justify-content: center;
+}
+
+.announce-hint {
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.countdown-stage {
+  position: relative;
+  margin: 32px auto 0;
+  display: flex;
+  justify-content: center;
+}
+
+.countdown-number {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(96px, 24vw, 200px);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  animation: countdown-pop 220ms ease;
+}
+
+@keyframes countdown-pop {
+  from {
+    transform: scale(0.7);
+    opacity: 0.4;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* --- Hands-free: tek kalıcı Duraklat kontrolü (alt şerit) --- */
+.handsfree-control {
+  position: sticky;
+  bottom: 0;
+  margin-top: 28px;
+  padding: 14px 0 18px;
+  background: linear-gradient(to top, var(--paper) 60%, transparent);
+}
+
+.handsfree-pause {
+  width: 100%;
+  padding: 18px 16px;
+  font-size: 1.05rem;
+}
+
+.handsfree-paused {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 10px;
+}
+
+.handsfree-paused .btn {
+  padding: 16px 10px;
 }
 
 .hold-timer-start {
