@@ -1615,6 +1615,165 @@ body,
   margin: 0;
 }
 
+/* ── Seans raporu (SessionReport) — day-summary deseninin yapılandırılmış sürümü ── */
+
+/* Seans özeti şeridi — takipli rakamların hızlı okunuşu */
+.report-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  margin: 28px 0 8px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.report-total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.report-total-val {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.report-total-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.report-exercises {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.report-exercise {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.report-ex-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.report-ex-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Takip durumu rozeti — dürüstlük sinyali (takip edildi / manuel / atlandı) */
+.report-ex-badge {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1px solid var(--hairline);
+  color: var(--muted);
+}
+
+.report-ex-badge[data-tone="tracked"] {
+  color: var(--accent);
+  border-color: rgba(200, 242, 78, 0.4);
+}
+
+.report-ex-badge[data-tone="manual"] {
+  color: var(--warn);
+  border-color: rgba(240, 180, 84, 0.35);
+}
+
+.report-ex-badge[data-tone="skipped"] {
+  color: var(--faint);
+}
+
+.report-ex-meta {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  font-size: 13.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.report-ex-sets {
+  color: var(--faint);
+}
+
+.report-ex-form {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.report-form-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Form değerlendirmesi — gerçek temiz/hatalı oranından (uydurma değil) */
+.report-grade {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--ink);
+  background: var(--accent);
+}
+
+.report-grade[data-grade="İyi"] {
+  background: var(--warn);
+}
+
+.report-grade[data-grade="Gelişmeli"],
+.report-grade[data-grade="Forma dikkat"] {
+  background: var(--critical);
+  color: var(--paper);
+}
+
+.report-faults {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.report-faults li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.report-faults li[data-severity="critical"] {
+  color: var(--critical);
+}
+
+.report-fault-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Şeffaf not — takip edilmeyen / değerlendirilemeyen (sessiz PASS yok) */
+.report-note {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+
 @media (max-width: 880px) {
   .program {
     padding: 24px 18px 40px;

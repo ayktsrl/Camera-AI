@@ -24,7 +24,7 @@ import GuidedSetScreen from "../components/GuidedSetScreen";
 import PoseSetScreen from "../components/PoseSetScreen";
 import PoseHoldScreen from "../components/PoseHoldScreen";
 import RestScreen from "../components/RestScreen";
-import DaySummary from "../components/DaySummary";
+import SessionReport from "../components/SessionReport";
 import ExercisePreview from "../components/ExercisePreview";
 import AnnounceScreen from "../components/AnnounceScreen";
 import CountdownScreen from "../components/CountdownScreen";
@@ -391,7 +391,7 @@ export default function ProgramMode({ onExit }) {
     );
   } else if (playerState.status === "done") {
     content = (
-      <DaySummary
+      <SessionReport
         summary={session.getDaySummary()}
         onFinish={exitToDays}
         coach={coach}
